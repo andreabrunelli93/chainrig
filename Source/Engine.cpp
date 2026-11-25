@@ -79,7 +79,8 @@ Engine::Engine()
         loadPreset (lastPreset, errors);
     }
 
-    startTimer (2000);   // controlla periodicamente nuove periferiche MIDI (es. pedaliera Bluetooth)
+    updateDeviceInfo();
+    startTimer (500);    // diagnostica audio; ogni 2 s controlla nuove periferiche MIDI (es. pedaliera Bluetooth)
 }
 
 Engine::~Engine()
@@ -140,6 +141,7 @@ void Engine::changeListenerCallback (ChangeBroadcaster* source)
 
         // Frequenza o buffer possono essere cambiati: chiudi il file per non mescolare formati
         recorder.stop();
+        updateDeviceInfo();
 
         if (auto xml = deviceManager.createStateXml())
             props().setValue ("audioDevice", xml.get());
@@ -636,6 +638,11 @@ void Engine::enableAllMidiInputs()
 
 void Engine::timerCallback()
 {
+    checkAudioHealth();
+
+    if (++timerTicks % 4 != 0)
+        return;
+
     StringArray current;
     for (const auto& device : MidiInput::getAvailableDevices())
         current.add (device.identifier);
@@ -730,20 +737,66 @@ int Engine::getNumDeviceInputs() const
 
 String Engine::getStatusText() const
 {
+    if (deviceName.isEmpty())
+        return "Nessuna scheda audio";
+
+    // due righe: scheda e formato; latenza, carico e buchi
+    return deviceName + String::fromUTF8 ("  ·  ") + String (deviceSampleRate / 1000.0, 1).replace (".", ",")
+         + String::fromUTF8 (" kHz  ·  buffer ") + String (deviceBufferSize)
+         + "\nlatenza " + String (deviceLatencyMs, 1).replace (".", ",") + String::fromUTF8 (" ms  ·  CPU ")
+         + String (roundToInt (deviceManager.getCpuUsage() * 100.0)) + String::fromUTF8 ("%  ·  picco ")
+         + String (roundToInt (recentPeakLoad * 100.0f)) + String::fromUTF8 ("%  ·  xrun ")
+         + String (loggedXruns + loggedOverloads);
+}
+
+void Engine::updateDeviceInfo()
+{
     auto* device = deviceManager.getCurrentAudioDevice();
 
     if (device == nullptr)
-        return "Nessuna scheda audio";
+    {
+        deviceName.clear();
+        return;
+    }
 
-    const double sr = device->getCurrentSampleRate();
-    const int buffer = device->getCurrentBufferSizeSamples();
-    const int totalLatency = buffer * 2 + device->getInputLatencyInSamples() + device->getOutputLatencyInSamples();
-    const double ms = sr > 0 ? 1000.0 * totalLatency / sr : 0.0;
+    deviceName = device->getName();
+    deviceSampleRate = device->getCurrentSampleRate();
+    deviceBufferSize = device->getCurrentBufferSizeSamples();
 
-    // due righe: scheda e formato; latenza e CPU
-    return device->getName() + String::fromUTF8 ("  ·  ") + String (sr / 1000.0, 1).replace (".", ",") + String::fromUTF8 (" kHz  ·  buffer ") + String (buffer)
-         + "\nlatenza " + String (ms, 1).replace (".", ",") + String::fromUTF8 (" ms  ·  CPU ")
-         + String (roundToInt (deviceManager.getCpuUsage() * 100.0)) + "%";
+    const int totalLatency = deviceBufferSize * 2 + device->getInputLatencyInSamples() + device->getOutputLatencyInSamples();
+    deviceLatencyMs = deviceSampleRate > 0 ? 1000.0 * totalLatency / deviceSampleRate : 0.0;
+
+    PluginScanner::log ("AUDIO  avvio: " + deviceName + ", " + String (deviceSampleRate, 0) + " Hz, buffer "
+                        + String (deviceBufferSize) + ", latenza " + String (deviceLatencyMs, 1) + " ms");
+}
+
+void Engine::checkAudioHealth()
+{
+    // carico massimo degli ultimi 2 s (4 letture)
+    loadWindow.add (recorder.takeMaxLoad());
+    while (loadWindow.size() > 4)
+        loadWindow.remove (0);
+
+    recentPeakLoad = 0.0f;
+    for (auto l : loadWindow)
+        recentPeakLoad = jmax (recentPeakLoad, l);
+
+    auto* device = deviceManager.getCurrentAudioDevice();
+    const int xruns = device != nullptr ? jmax (0, device->getXRunCount()) : 0;
+    const int overloads = recorder.getOverloads();
+    const int late = recorder.getLateCallbacks();
+
+    if (xruns != loggedXruns || overloads != loggedOverloads || late != loggedLate)
+    {
+        PluginScanner::log ("AUDIO  xrun scheda " + String (xruns) + " (+" + String (xruns - loggedXruns) + ")"
+                            + ", catena oltre il tempo " + String (overloads) + " (+" + String (overloads - loggedOverloads) + ")"
+                            + ", blocchi in ritardo " + String (late) + " (+" + String (late - loggedLate) + ")"
+                            + ", carico max " + String (roundToInt (recentPeakLoad * 100.0f)) + "%"
+                            + ", CPU " + String (roundToInt (deviceManager.getCpuUsage() * 100.0)) + "%");
+        loggedXruns = xruns;
+        loggedOverloads = overloads;
+        loggedLate = late;
+    }
 }
 
 //==============================================================================

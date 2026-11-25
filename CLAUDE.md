@@ -57,6 +57,7 @@ scambio dei posti e salvataggio/caricamento dei preset, usando l'AudioPluginExam
 reale, né su Mac, né su Windows.
 
 ## Limiti noti e idee per dopo
+- Diagnostica audio: `Recorder` misura quanto dura ogni blocco rispetto al tempo disponibile. `Engine::checkAudioHealth` (ogni 500 ms) mette nella barra di stato "picco %" e "xrun" e scrive gli eventi in `scan.log` (righe AUDIO). Il 25/11/2026 sul Mac, con buffer 128 a 44,1 kHz, BABY Audio Crystalline da solo dava circa 18 blocchi al minuto oltre il tempo (fino al 209%). La catena vuota e i singoli TONE3000 e ValhallaDelay ne davano 0. CoreAudio non conta questi casi come xrun.
 - Quando carichi o sostituisci un plugin c'è un attimo di silenzio. Si può migliorare preparando il plugin in anticipo e facendo una dissolvenza.
 - Se un plugin va in crash, si chiude tutto il programma.
 - Se un plugin mono-in/stereo-out è in bypass, il canale destro resta muto.

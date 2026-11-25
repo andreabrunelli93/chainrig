@@ -108,6 +108,11 @@ public:
     /** Interfaccia: vero se almeno un campione ha raggiunto 0 dBFS dall'ultima lettura. */
     bool takeClipped()                       { return clipped.exchange (false); }
 
+    /** Diagnostica (interfaccia): carico massimo di un blocco dall'ultima lettura (1.0 = tutto il tempo disponibile). */
+    float takeMaxLoad()                      { return maxLoad.exchange (0.0f); }
+    int getOverloads() const                 { return overloads.load(); }
+    int getLateCallbacks() const             { return lateCallbacks.load(); }
+
     double getSeconds() const
     {
         const double rate = sampleRate.load();
@@ -119,7 +124,29 @@ public:
                                            float* const* outputs, int numOutputs, int numSamples,
                                            const juce::AudioIODeviceCallbackContext& context) override
     {
+        // Diagnostica: quanto tempo prende la catena rispetto a quello disponibile per il blocco
+        const auto startTicks = juce::Time::getHighResolutionTicks();
+        const double rate = sampleRate.load();
+        const double budget = rate > 0.0 ? (double) numSamples / rate : 0.0;
+
+        if (lastStartTicks != 0 && budget > 0.0
+             && (double) (startTicks - lastStartTicks) * secondsPerTick > budget * 1.8)
+            ++lateCallbacks;   // il blocco è arrivato in ritardo: il sistema non ha chiamato in tempo
+
+        lastStartTicks = startTicks;
+
         player.audioDeviceIOCallbackWithContext (inputs, numInputs, outputs, numOutputs, numSamples, context);
+
+        if (budget > 0.0)
+        {
+            const float load = (float) ((double) (juce::Time::getHighResolutionTicks() - startTicks) * secondsPerTick / budget);
+
+            float current = maxLoad.load();
+            while (load > current && ! maxLoad.compare_exchange_weak (current, load)) {}
+
+            if (load > 1.0f)
+                ++overloads;   // la catena ha impiegato più del tempo del blocco: buco nell'audio
+        }
 
         if (numOutputs <= 0 || outputs[0] == nullptr)
             return;
@@ -154,6 +181,7 @@ public:
     void audioDeviceAboutToStart (juce::AudioIODevice* device) override
     {
         sampleRate = device->getCurrentSampleRate();
+        lastStartTicks = 0;
         player.audioDeviceAboutToStart (device);
     }
 
@@ -174,6 +202,12 @@ private:
     std::atomic<int> droppedBlocks { 0 };
 
     std::atomic<float> peaks[2] { 0.0f, 0.0f };
+
+    // diagnostica dei buchi audio
+    const double secondsPerTick = 1.0 / (double) juce::Time::getHighResolutionTicksPerSecond();
+    juce::int64 lastStartTicks = 0;           // solo thread audio
+    std::atomic<float> maxLoad { 0.0f };
+    std::atomic<int> overloads { 0 }, lateCallbacks { 0 };
     std::atomic<bool> clipped { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Recorder)

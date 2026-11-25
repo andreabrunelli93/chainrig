@@ -165,6 +165,19 @@ private:
 
     juce::StringArray knownMidiInputs;
 
+    // Stato della scheda letto solo quando cambia: interrogare CoreAudio/ASIO di continuo
+    // dal thread dell'interfaccia può disturbare il thread audio
+    void updateDeviceInfo();
+    void checkAudioHealth();
+    juce::String deviceName;
+    double deviceSampleRate = 0.0, deviceLatencyMs = 0.0;
+    int deviceBufferSize = 0;
+
+    float recentPeakLoad = 0.0f;              // carico massimo negli ultimi 2 s
+    juce::Array<float> loadWindow;            // ultime letture (ogni 500 ms)
+    int loggedXruns = 0, loggedOverloads = 0, loggedLate = 0;
+    int timerTicks = 0;
+
     JUCE_DECLARE_WEAK_REFERENCEABLE (Engine)
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Engine)
 };
