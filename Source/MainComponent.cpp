@@ -295,6 +295,124 @@ void PluginWindow::closeButtonPressed()
 }
 
 //==============================================================================
+namespace
+{
+    constexpr float meterFloorDb = -48.0f;
+    constexpr float meterTopDb   = 0.0f;
+
+    float dbToMeter (float db)
+    {
+        return jlimit (0.0f, 1.0f, (db - meterFloorDb) / (meterTopDb - meterFloorDb));
+    }
+
+    float gainToMeter (float gain)
+    {
+        return dbToMeter (Decibels::gainToDecibels (gain, meterFloorDb - 1.0f));
+    }
+}
+
+void OutputMeter::timerCallback()
+{
+    auto& recorder = engine.getRecorder();
+    const auto now = Time::getMillisecondCounter();
+
+    for (int ch = 0; ch < 2; ++ch)
+    {
+        const float peak = recorder.takePeak (ch);
+
+        // salita immediata, discesa graduale (circa 20 dB al secondo)
+        level[ch] = jmax (peak, level[ch] * 0.86f);
+
+        if (peak >= hold[ch] || now > holdTime[ch])
+        {
+            hold[ch] = peak >= hold[ch] ? peak : hold[ch] * 0.9f;
+            if (peak >= hold[ch])
+                holdTime[ch] = now + 1500;
+        }
+
+        maxPeak = jmax (maxPeak, peak);
+    }
+
+    if (recorder.takeClipped())
+        clipLatched = true;
+
+    repaint();
+}
+
+void OutputMeter::mouseDown (const MouseEvent&)
+{
+    clipLatched = false;
+    maxPeak = 0.0f;
+    repaint();
+}
+
+void OutputMeter::paint (Graphics& g)
+{
+    auto bounds = getLocalBounds().toFloat();
+    g.setColour (Palette::panel);
+    g.fillRoundedRectangle (bounds, 10.0f);
+
+    auto area = bounds.reduced (6.0f);
+
+    // spia CLIP in alto
+    auto clipBox = area.removeFromTop (34.0f);
+    g.setColour (clipLatched ? Palette::danger : Palette::off.withAlpha (0.5f));
+    g.fillRoundedRectangle (clipBox, 6.0f);
+    g.setColour (clipLatched ? Colours::white : Palette::textDim);
+    g.setFont (FontOptions (14.0f, Font::bold));
+    g.drawText ("CLIP", clipBox, Justification::centred);
+
+    // picco massimo in dB, in basso
+    auto valueBox = area.removeFromBottom (24.0f);
+    const float maxDb = Decibels::gainToDecibels (maxPeak, -100.0f);
+    g.setColour (maxDb >= 0.0f ? Palette::danger : (maxDb > -6.0f ? Palette::accent : Palette::textDim));
+    g.setFont (FontOptions (14.0f));
+    g.drawText (maxPeak > 0.0f ? String (maxDb, 1) : String ("-inf"), valueBox, Justification::centred);
+
+    area.removeFromTop (6.0f);
+    area.removeFromBottom (4.0f);
+
+    // scala: tacche a 0, -6, -12, -24, -36 dB
+    g.setFont (FontOptions (10.0f));
+    for (float db : { 0.0f, -6.0f, -12.0f, -24.0f, -36.0f })
+    {
+        const float y = area.getBottom() - dbToMeter (db) * area.getHeight();
+        g.setColour (Palette::off);
+        g.drawHorizontalLine ((int) y, area.getX(), area.getRight());
+    }
+
+    // due barre (L e R)
+    const float gap = 4.0f;
+    const float barWidth = (area.getWidth() - gap) / 2.0f;
+
+    for (int ch = 0; ch < 2; ++ch)
+    {
+        auto bar = Rectangle<float> (area.getX() + (float) ch * (barWidth + gap), area.getY(), barWidth, area.getHeight());
+        g.setColour (Palette::background);
+        g.fillRoundedRectangle (bar, 3.0f);
+
+        const float h = gainToMeter (level[ch]) * bar.getHeight();
+        auto filled = bar.withTop (bar.getBottom() - h);
+
+        // verde fino a -12, giallo fino a -3, rosso sopra
+        ColourGradient gradient (Palette::danger, bar.getX(), bar.getY(),
+                                 Palette::on, bar.getX(), bar.getBottom(), false);
+        gradient.addColour (1.0 - dbToMeter (-3.0f),  Palette::accent);
+        gradient.addColour (1.0 - dbToMeter (-12.0f), Palette::on);
+        g.setGradientFill (gradient);
+        g.fillRoundedRectangle (filled, 3.0f);
+
+        // tenuta del picco
+        if (hold[ch] > 0.0f)
+        {
+            const float y = bar.getBottom() - gainToMeter (hold[ch]) * bar.getHeight();
+            g.setColour (hold[ch] >= 1.0f ? Palette::danger : Palette::text);
+            g.fillRect (bar.getX(), y - 1.0f, bar.getWidth(), 2.0f);
+        }
+    }
+}
+
+//==============================================================================
 MainComponent::MainComponent (Engine& e) : engine (e)
 {
     LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
@@ -323,6 +441,7 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     for (int i = 0; i < Engine::numButtons; ++i)
         addAndMakeVisible (bigButtons.add (new BigButton (*this, i)));
 
+    addAndMakeVisible (outputMeter);
     addChildComponent (tunerOverlay);
 
     engine.onProcessorAboutToBeDeleted = [this] (AudioProcessor* p) { pluginWindows.erase (p); };
@@ -384,6 +503,10 @@ void MainComponent::resized()
     statusLabel.setBounds (top.reduced (8, 0));
 
     area.removeFromTop (12);
+
+    // misuratore d'uscita sul lato destro, per tutta l'altezza
+    outputMeter.setBounds (area.removeFromRight (64));
+    area.removeFromRight (10);
 
     // pulsanti grandi in basso
     auto bottom = area.removeFromBottom (jmax (150, area.getHeight() * 32 / 100));

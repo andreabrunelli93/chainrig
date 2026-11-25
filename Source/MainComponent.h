@@ -59,6 +59,26 @@ private:
 };
 
 //==============================================================================
+/** Barra laterale con il livello d'uscita (L/R), la tenuta del picco e la spia CLIP.
+    La spia resta accesa finché non la tocchi. */
+class OutputMeter final : public juce::Component, private juce::Timer
+{
+public:
+    explicit OutputMeter (Engine& e) : engine (e) { startTimerHz (30); }
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+
+private:
+    void timerCallback() override;
+
+    Engine& engine;
+    float level[2] {}, hold[2] {};
+    juce::uint32 holdTime[2] {};
+    float maxPeak = 0.0f;      // massimo dall'ultimo tocco, in lineare
+    bool clipLatched = false;
+};
+
+//==============================================================================
 class TunerOverlay final : public juce::Component, private juce::Timer
 {
 public:
@@ -138,6 +158,7 @@ private:
     juce::OwnedArray<SlotView> slotViews;
     juce::OwnedArray<BigButton> bigButtons;
     TunerOverlay tunerOverlay { engine };
+    OutputMeter outputMeter { engine };
 
     std::map<juce::AudioProcessor*, std::unique_ptr<PluginWindow>> pluginWindows;
     std::unique_ptr<juce::AlertWindow> textInput;

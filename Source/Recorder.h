@@ -5,7 +5,7 @@
 #include <atomic>
 
 //==============================================================================
-/** Registratore dell'uscita (canali 1-2, cioè quello che senti).
+/** Registratore e misuratore dell'uscita (canali 1-2, cioè quello che senti).
 
     Sta tra la scheda audio e l'AudioProcessorPlayer: inoltra ogni callback al player
     e poi copia il buffer d'uscita in un file WAV 24 bit. La scrittura su disco avviene
@@ -102,6 +102,12 @@ public:
     juce::File getLastSavedFile() const      { return lastSavedFile; }
     int getDroppedBlocks() const             { return droppedBlocks.load(); }
 
+    /** Interfaccia: picco (lineare) del canale dall'ultima lettura, poi azzera. */
+    float takePeak (int channel)             { return peaks[juce::jlimit (0, 1, channel)].exchange (0.0f); }
+
+    /** Interfaccia: vero se almeno un campione ha raggiunto 0 dBFS dall'ultima lettura. */
+    bool takeClipped()                       { return clipped.exchange (false); }
+
     double getSeconds() const
     {
         const double rate = sampleRate.load();
@@ -118,13 +124,26 @@ public:
         if (numOutputs <= 0 || outputs[0] == nullptr)
             return;
 
+        const float* channels[2] = { outputs[0], (numOutputs > 1 && outputs[1] != nullptr) ? outputs[1] : outputs[0] };
+
+        // Misuratore d'uscita: picco del blocco, tenuto finché l'interfaccia non lo legge
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            const auto range = juce::FloatVectorOperations::findMinAndMax (channels[ch], numSamples);
+            const float blockPeak = juce::jmax (-range.getStart(), range.getEnd());
+
+            float current = peaks[ch].load();
+            while (blockPeak > current && ! peaks[ch].compare_exchange_weak (current, blockPeak)) {}
+
+            if (blockPeak >= 1.0f)
+                clipped = true;
+        }
+
         // Mai bloccare il thread audio: se start/stop tiene il lock, salta questo blocco
         const juce::ScopedTryLock sl (writerLock);
 
         if (! sl.isLocked() || activeWriter == nullptr)
             return;
-
-        const float* channels[2] = { outputs[0], (numOutputs > 1 && outputs[1] != nullptr) ? outputs[1] : outputs[0] };
 
         if (activeWriter->write (channels, numSamples))
             samplesWritten += numSamples;
@@ -153,6 +172,9 @@ private:
     std::atomic<double> sampleRate { 0.0 };
     std::atomic<juce::int64> samplesWritten { 0 };
     std::atomic<int> droppedBlocks { 0 };
+
+    std::atomic<float> peaks[2] { 0.0f, 0.0f };
+    std::atomic<bool> clipped { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Recorder)
 };

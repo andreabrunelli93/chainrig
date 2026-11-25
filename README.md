@@ -47,6 +47,14 @@ Le impostazioni sono salvate in `~/Library/Application Support/ChainRig/ChainRig
 
 > I preset fatti su Mac aperti su Windows ritrovano i plugin cercandoli per nome e identificativo. I percorsi dei file `.nam` e delle IR, invece, cambiano tra un sistema e l'altro: sul Surface dovrai ricaricarli una volta e risalvare il preset.
 
+## Livello d'uscita
+
+La barra a destra mostra il livello d'uscita (L e R) da −48 a 0 dBFS. È verde fino a −12, gialla fino a −3 e rossa sopra.
+La lineetta bianca indica il picco recente. In basso c'è il picco massimo in dB.
+La spia **CLIP** diventa rossa quando un campione raggiunge 0 dBFS e resta accesa finché non tocchi la barra, così vedi
+il clip anche se è passato mentre guardavi altrove. Toccando la barra si azzera anche il picco massimo. Lascia qualche
+dB di margine: un picco intorno a −6 dB va bene.
+
 ## Registrare
 
 Il pulsante **REC** in alto registra quello che esce dalla scheda (canali 1-2, cioè la catena completa) in un file WAV

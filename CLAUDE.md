@@ -13,6 +13,7 @@ Focusrite, driver ASIO). Lo sviluppo e le prove si fanno su un MacBook Pro con A
 - 4 pulsanti touch grandi che accendono o spengono i posti assegnati, comandabili anche da pedaliera MIDI (CC).
 - Preset in file JSON.
 - Bassa latenza (ASIO su Windows).
+- Barra laterale con il livello d'uscita e la spia CLIP, che resta accesa fino al tocco (aggiunta su richiesta dell'utente).
 - Pulsante REC: registra l'uscita in WAV nella cartella Download (aggiunto su richiesta dell'utente).
 
 Nella catena l'utente userà: catture NAM A2 (plugin TONE3000 o NAM), IR, Valhalla, Strymon BigSky.
@@ -27,7 +28,8 @@ Nella catena l'utente userà: catture NAM A2 (plugin TONE3000 o NAM), IR, Valhal
   - Impostazioni in `ChainRig.settings`, con le chiavi `cc_button1..4`, `cc_tuner`, `cc_nextPreset`, `cc_prevPreset` e `midiMode`.
 - `Source/Recorder.h`: è lui il callback della scheda audio. Avvolge l'`AudioProcessorPlayer`, poi copia le uscite 1-2 in un
   `ThreadedWriter` (WAV 24 bit, `~/Downloads`). Usa un `ScopedTryLock` per non bloccare mai il thread audio. Si ferma
-  quando cambia la scheda audio.
+  quando cambia la scheda audio. Calcola anche il picco per il misuratore (`takePeak`/`takeClipped`, atomici) letto da
+  `OutputMeter` in MainComponent.
 - `Source/PluginChooser.*`: finestra "Scegli plugin" (IMPOSTAZIONI). Elenca i file VST3 con una casella ciascuno. APPLICA toglie i
   tipi dei file senza spunta e chiama `scanAndAddFile` (su un suo thread) solo per i file spuntati e mancanti. L'utente ha
   tutti i plugin di Logic: vuole importare solo quelli che usa dal vivo. La lista JUCE completa resta sotto "Avanzate...".
