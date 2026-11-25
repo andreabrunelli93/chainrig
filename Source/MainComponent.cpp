@@ -509,11 +509,11 @@ void MainComponent::showBigButtonEditMenu (int index)
 {
     const auto& button = engine.getButton (index);
 
-    enum { rename = 1, slotBase = 100 };
+    enum { renameId = 1, slotBase = 100 };
 
     PopupMenu menu;
     menu.addSectionHeader ("Pulsante " + String (index + 1) + "  (MIDI CC " + String (engine.getButtonCC (index)) + ")");
-    menu.addItem (rename, "Rinomina...");
+    menu.addItem (renameId, "Rinomina...");
     menu.addSectionHeader ("Posti che accende/spegne");
 
     for (int s = 0; s < Engine::numSlots; ++s)
@@ -525,7 +525,7 @@ void MainComponent::showBigButtonEditMenu (int index)
     menu.showMenuAsync (PopupMenu::Options().withTargetComponent (bigButtons[index]),
                         [this, index] (int result)
     {
-        if (result == rename)
+        if (result == renameId)
         {
             askText ("Nome del pulsante", engine.getButton (index).label,
                      [this, index] (String text) { engine.setButtonLabel (index, text); });
