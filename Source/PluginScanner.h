@@ -128,11 +128,13 @@ namespace PluginScanner
             // Attende a piccoli passi per poter interrompere se l'utente preme Annulla
             for (int waited = 0; child.isRunning(); waited += 100)
             {
-                if (shouldExit() || waited >= timeoutMs)
+                const bool cancelled = shouldExit() || juce::Thread::currentThreadShouldExit();
+
+                if (cancelled || waited >= timeoutMs)
                 {
                     child.kill();
 
-                    if (shouldExit())
+                    if (cancelled)
                     {
                         lastProblem = "annullato";
                         return true;       // annullato: niente esclusione

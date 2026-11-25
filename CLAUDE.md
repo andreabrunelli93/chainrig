@@ -24,6 +24,9 @@ Nella catena l'utente userà: catture NAM A2 (plugin TONE3000 o NAM), IR, Valhal
   - Ogni posto salva la `PluginDescription` usata per crearlo: serve per i preset, perché quella dell'istanza VST3 punta al file `.so`/`.dll` interno e non al bundle.
   - Il MIDI viene ricevuto sul thread MIDI e passato al thread dell'interfaccia con `callAsync` + `WeakReference`.
   - Impostazioni in `ChainRig.settings`, con le chiavi `cc_button1..4`, `cc_tuner`, `cc_nextPreset`, `cc_prevPreset` e `midiMode`.
+- `Source/PluginChooser.*`: finestra "Scegli plugin" (IMPOSTAZIONI). Elenca i file VST3 con una casella ciascuno. APPLICA toglie i
+  tipi dei file senza spunta e chiama `scanAndAddFile` (su un suo thread) solo per i file spuntati e mancanti. L'utente ha
+  tutti i plugin di Logic: vuole importare solo quelli che usa dal vivo. La lista JUCE completa resta sotto "Avanzate...".
 - `Source/PluginScanner.h`: ricerca dei plugin fuori processo. `KnownPluginList::setCustomScanner` avvia
   `ChainRig --scan-plugin <formato> <file> <risultato.xml>` per ogni file, con un timeout di 30 s. In caso di timeout o crash
   il file finisce tra gli esclusi. La copia figlia non crea l'Engine, nasconde l'icona nel Dock e chiude subito.

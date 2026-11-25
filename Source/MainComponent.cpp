@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include "PluginChooser.h"
 
 using namespace juce;
 
@@ -452,7 +453,7 @@ void MainComponent::showSlotMenu (int slot)
 
     if (types.isEmpty())
     {
-        menu.addItem (scanPlugins, "Nessun plugin trovato: cerca plugin...");
+        menu.addItem (scanPlugins, "Nessun plugin nella lista: scegli plugin...");
     }
     else if (empty)
     {
@@ -491,7 +492,7 @@ void MainComponent::showSlotMenu (int slot)
             case moveLeft:     engine.swapSlots (slot, slot - 1); break;
             case moveRight:    engine.swapSlots (slot, slot + 1); break;
             case removePlugin: engine.clearSlot (slot); break;
-            case scanPlugins:  showPluginList(); break;
+            case scanPlugins:  showPluginChooser(); break;
             default: break;
         }
     });
@@ -616,7 +617,7 @@ void MainComponent::showSettingsMenu()
 
     PopupMenu menu;
     menu.addItem (audioSettings, "Scheda audio...");
-    menu.addItem (pluginList, "Cerca / gestisci plugin...");
+    menu.addItem (pluginList, "Scegli plugin...");
     menu.addSubMenu ("Ingresso chitarra", inputMenu);
     menu.addSubMenu ("Pedaliera MIDI", midiMenu);
     menu.addItem (fullScreen, "Schermo intero", true, isFullScreen);
@@ -629,7 +630,7 @@ void MainComponent::showSettingsMenu()
         switch (result)
         {
             case audioSettings: showAudioSettings(); break;
-            case pluginList:    showPluginList(); break;
+            case pluginList:    showPluginChooser(); break;
             case midiMomentary: engine.setMidiMode (Engine::MidiMode::momentary); break;
             case midiAbsolute:  engine.setMidiMode (Engine::MidiMode::absolute); break;
             case fullScreen:    setFullScreen (! isFullScreen); break;
@@ -666,12 +667,22 @@ void MainComponent::showAudioSettings()
     launchDialog ("Scheda audio", selector);
 }
 
+void MainComponent::showPluginChooser()
+{
+    SafePointer<MainComponent> safeThis (this);
+    launchDialog ("Scegli plugin", new PluginChooser (engine, [safeThis]
+    {
+        if (safeThis != nullptr)
+            safeThis->showPluginList();
+    }));
+}
+
 void MainComponent::showPluginList()
 {
     auto* list = new PluginListComponent (engine.formatManager, engine.knownPlugins,
                                           engine.getDeadMansPedalFile(), &engine.props(), true);
     list->setSize (760, 560);
-    launchDialog ("Plugin (usa 'Opzioni' > 'Cerca nuovi plugin')", list);
+    launchDialog ("Lista completa dei plugin (avanzate)", list);
 }
 
 void MainComponent::openPluginWindow (AudioProcessor* processor)

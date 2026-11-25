@@ -116,6 +116,7 @@ private:
     void showSettingsMenu();
     void showBigButtonEditMenu (int index);
     void showAudioSettings();
+    void showPluginChooser();
     void showPluginList();
     void openPluginWindow (juce::AudioProcessor*);
     void askText (const juce::String& title, const juce::String& initial, std::function<void (juce::String)> onOk);

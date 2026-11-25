@@ -6,7 +6,7 @@ accordatore, comandi da pedaliera MIDI e preset. Fatto con JUCE 9 per Windows
 
 ## Cosa fa
 
-- **10 posti in fila**: tocchi un posto e scegli un plugin dalla lista, che è quella dei plugin trovati con la scansione. Dallo stesso menu puoi aprire l'interfaccia del plugin, metterlo in bypass, sostituirlo, spostarlo o rimuoverlo. I posti vuoti vengono saltati.
+- **10 posti in fila**: tocchi un posto e scegli un plugin dalla lista, che contiene solo i plugin scelti in **Scegli plugin**. Dallo stesso menu puoi aprire l'interfaccia del plugin, metterlo in bypass, sostituirlo, spostarlo o rimuoverlo. I posti vuoti vengono saltati.
 - **4 pulsanti grandi**: ognuno accende e spegne i posti che gli assegni. Esempio: BOOST controlla il posto 2. Un posto assegnato a un pulsante suona solo quando quel pulsante è acceso.
 - **Accordatore**: lavora sull'ingresso, prima della catena, e silenzia l'uscita mentre accordi. Mostra la nota con il nome inglese e quello italiano, i cent e la frequenza.
 - **Preset**: un file `.chainrig` per preset, salvato in `Documenti\ChainRig\Preset`. Ogni preset contiene i plugin con tutte le loro impostazioni, i bypass e le assegnazioni dei pulsanti. Si cambiano con `<` e `>` oppure da MIDI.
@@ -51,10 +51,12 @@ Le impostazioni sono salvate in `~/Library/Application Support/ChainRig/ChainRig
 
 1. **IMPOSTAZIONI → Scheda audio**: su Windows scegli il tipo **ASIO**, su Mac **CoreAudio**, e poi la tua scheda (Gigboard o altra interfaccia). Imposta 48 kHz e un buffer di 64 o 128 campioni.
 2. **IMPOSTAZIONI → Ingresso chitarra**: scegli l'ingresso a cui è collegata la chitarra.
-3. **IMPOSTAZIONI → Cerca / gestisci plugin → Opzioni → "Scan for new or updated VST3 plug-ins"**. La lista dei plugin viene salvata e non devi ripetere la scansione.
-   Ogni plugin viene esaminato in un processo separato: se si blocca per più di 30 secondi o va in crash,
-   finisce tra gli esclusi e la scansione continua con il successivo, senza fermare ChainRig.
-   Gli esclusi si vedono e si possono riprovare dalla stessa finestra.
+3. **IMPOSTAZIONI → Scegli plugin...**: compare l'elenco dei file VST3 delle cartelle dei plugin. Scrivi nel filtro
+   (es. "valhalla", "tone"), spunta solo quelli che usi dal vivo e premi **APPLICA**. Vengono esaminati solo quelli spuntati,
+   e quelli senza spunta vengono tolti dalla lista. **Nessuno** toglie la spunta a tutti quelli visibili. La scelta viene salvata.
+   Ogni plugin viene esaminato in un processo separato: se si blocca per più di 30 secondi o va in crash, viene segnato
+   come escluso e ChainRig continua. Il dettaglio è in `scan.log`, accanto alle impostazioni.
+   **Avanzate...** apre la lista completa di JUCE, che serve per aggiungere altre cartelle.
 4. Tocca un posto vuoto → **Scegli plugin**. Per esempio NAM nel posto 3, un caricatore di IR nel 4, Valhalla nel 7.
 5. **MODIFICA** → tocca un pulsante grande per rinominarlo e scegliere i posti che controlla. Poi tocca di nuovo **MODIFICA** per uscire.
 6. Tocca il nome del preset → **Salva come...**
