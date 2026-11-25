@@ -110,6 +110,11 @@ public:
 
     /** Diagnostica (interfaccia): carico massimo di un blocco dall'ultima lettura (1.0 = tutto il tempo disponibile). */
     float takeMaxLoad()                      { return maxLoad.exchange (0.0f); }
+
+    /** Livelli massimi dall'ultima lettura (lineari): ingresso della chitarra e uscita. */
+    void setInputChannel (int ch)            { inputChannel = juce::jmax (0, ch); }
+    float takeInputPeak()                    { return inputPeak.exchange (0.0f); }
+    float takeOutputPeak()                   { return outputPeakDiag.exchange (0.0f); }
     int getOverloads() const                 { return overloads.load(); }
     int getLateCallbacks() const             { return lateCallbacks.load(); }
 
@@ -124,6 +129,15 @@ public:
                                            float* const* outputs, int numOutputs, int numSamples,
                                            const juce::AudioIODeviceCallbackContext& context) override
     {
+        // Livello d'ingresso (canale della chitarra), prima della catena
+        if (const int ch = inputChannel.load(); ch < numInputs && inputs[ch] != nullptr)
+        {
+            const auto r = juce::FloatVectorOperations::findMinAndMax (inputs[ch], numSamples);
+            const float p = juce::jmax (-r.getStart(), r.getEnd());
+            float cur = inputPeak.load();
+            while (p > cur && ! inputPeak.compare_exchange_weak (cur, p)) {}
+        }
+
         // Diagnostica: quanto tempo prende la catena rispetto a quello disponibile per il blocco
         const auto startTicks = juce::Time::getHighResolutionTicks();
         const double rate = sampleRate.load();
@@ -161,6 +175,9 @@ public:
 
             float current = peaks[ch].load();
             while (blockPeak > current && ! peaks[ch].compare_exchange_weak (current, blockPeak)) {}
+
+            float diag = outputPeakDiag.load();
+            while (blockPeak > diag && ! outputPeakDiag.compare_exchange_weak (diag, blockPeak)) {}
 
             if (blockPeak >= 1.0f)
                 clipped = true;
@@ -208,6 +225,8 @@ private:
     juce::int64 lastStartTicks = 0;           // solo thread audio
     std::atomic<float> maxLoad { 0.0f };
     std::atomic<int> overloads { 0 }, lateCallbacks { 0 };
+    std::atomic<int> inputChannel { 0 };
+    std::atomic<float> inputPeak { 0.0f }, outputPeakDiag { 0.0f };
     std::atomic<bool> clipped { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Recorder)

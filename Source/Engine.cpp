@@ -79,6 +79,7 @@ Engine::Engine()
         loadPreset (lastPreset, errors);
     }
 
+    recorder.setInputChannel (inputChannel);
     updateDeviceInfo();
     startTimer (500);    // diagnostica audio; ogni 2 s controlla nuove periferiche MIDI (es. pedaliera Bluetooth)
 }
@@ -723,6 +724,7 @@ void Engine::setTunerActive (bool active)
 void Engine::setInputChannel (int channelIndex)
 {
     inputChannel = jmax (0, channelIndex);
+    recorder.setInputChannel (inputChannel);
     props().setValue ("inputChannel", inputChannel);
     rewire();
     sendChangeMessage();
@@ -780,6 +782,15 @@ void Engine::checkAudioHealth()
     recentPeakLoad = 0.0f;
     for (auto l : loadWindow)
         recentPeakLoad = jmax (recentPeakLoad, l);
+
+    // Livelli (solo con CHAINRIG_LEVEL_LOG=1): per capire da dove arriva un suono a riposo
+    {
+        const float in = recorder.takeInputPeak(), out = recorder.takeOutputPeak();
+        static const bool levelLog = SystemStats::getEnvironmentVariable ("CHAINRIG_LEVEL_LOG", {}) == "1";
+        if (levelLog)
+            PluginScanner::log ("LIVELLI  ingresso " + String (Decibels::gainToDecibels (in, -120.0f), 1)
+                                + " dB  uscita " + String (Decibels::gainToDecibels (out, -120.0f), 1) + " dB");
+    }
 
     auto* device = deviceManager.getCurrentAudioDevice();
     const int xruns = device != nullptr ? jmax (0, device->getXRunCount()) : 0;
