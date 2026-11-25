@@ -114,6 +114,8 @@ private:
     void refresh();
     void showPresetMenu();
     void showSettingsMenu();
+    void toggleRecording();
+    void updateRecButton();
     void showBigButtonEditMenu (int index);
     void showAudioSettings();
     void showPluginChooser();
@@ -128,8 +130,10 @@ private:
     bool editMode = false;
 
     juce::TextButton prevButton { "<" }, nextButton { ">" }, presetButton, tunerButton { "ACCORDATORE" },
-                     editButton { "MODIFICA" }, settingsButton { "IMPOSTAZIONI" };
+                     editButton { "MODIFICA" }, settingsButton { "IMPOSTAZIONI" }, recButton { "REC" };
     juce::Label statusLabel;
+    juce::File lastRecording;              // ultimo file salvato, mostrato per qualche secondo
+    juce::uint32 lastRecordingShownUntil = 0;
 
     juce::OwnedArray<SlotView> slotViews;
     juce::OwnedArray<BigButton> bigButtons;

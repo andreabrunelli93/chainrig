@@ -300,7 +300,7 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
     setLookAndFeel (&lookAndFeel);
 
-    for (auto* b : { &prevButton, &nextButton, &presetButton, &tunerButton, &editButton, &settingsButton })
+    for (auto* b : { &prevButton, &nextButton, &presetButton, &tunerButton, &editButton, &settingsButton, &recButton })
         addAndMakeVisible (b);
 
     prevButton.onClick     = [this] { engine.loadAdjacentPreset (-1); };
@@ -309,6 +309,9 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     tunerButton.onClick    = [this] { engine.setTunerActive (! engine.isTunerActive()); };
     editButton.onClick     = [this] { editMode = ! editMode; refresh(); };
     settingsButton.onClick = [this] { showSettingsMenu(); };
+    recButton.onClick      = [this] { toggleRecording(); };
+    recButton.setColour (TextButton::buttonOnColourId, Palette::danger);
+    recButton.setColour (TextButton::textColourOnId, Colours::white);
 
     statusLabel.setFont (FontOptions (15.0f));
     statusLabel.setJustificationType (Justification::centredRight);
@@ -375,6 +378,7 @@ void MainComponent::resized()
     nextButton.setBounds (top.removeFromLeft (64).reduced (3));
     top.removeFromLeft (12);
     tunerButton.setBounds (top.removeFromLeft (180).reduced (3));
+    recButton.setBounds (top.removeFromLeft (130).reduced (3));
     settingsButton.setBounds (top.removeFromRight (170).reduced (3));
     editButton.setBounds (top.removeFromRight (140).reduced (3));
     statusLabel.setBounds (top.reduced (8, 0));
@@ -411,7 +415,55 @@ void MainComponent::changeListenerCallback (ChangeBroadcaster*)
 
 void MainComponent::timerCallback()
 {
-    statusLabel.setText (engine.getStatusText(), dontSendNotification);
+    updateRecButton();
+
+    if (lastRecording != File() && Time::getMillisecondCounter() < lastRecordingShownUntil)
+        statusLabel.setText ("Salvato in Download: " + lastRecording.getFileName(), dontSendNotification);
+    else
+        statusLabel.setText (engine.getStatusText(), dontSendNotification);
+}
+
+void MainComponent::toggleRecording()
+{
+    auto& recorder = engine.getRecorder();
+
+    if (recorder.isRecording())
+    {
+        recorder.stop();   // il messaggio "Salvato in Download" lo mostra updateRecButton()
+    }
+    else
+    {
+        String error;
+        if (! recorder.start (error))
+            showError ("Registrazione", error);
+    }
+
+    timerCallback();
+}
+
+void MainComponent::updateRecButton()
+{
+    auto& recorder = engine.getRecorder();
+    const bool recording = recorder.isRecording();
+
+    // Appena finita (dal pulsante o dal motore, per un cambio di scheda audio): mostra il file
+    if (! recording && recButton.getToggleState())
+    {
+        lastRecording = recorder.getLastSavedFile();
+        lastRecordingShownUntil = Time::getMillisecondCounter() + 6000;
+    }
+
+    recButton.setToggleState (recording, dontSendNotification);
+
+    if (recording)
+    {
+        const int s = (int) recorder.getSeconds();
+        recButton.setButtonText (String::formatted ("REC %d:%02d", s / 60, s % 60));
+    }
+    else
+    {
+        recButton.setButtonText ("REC");
+    }
 }
 
 void MainComponent::refresh()

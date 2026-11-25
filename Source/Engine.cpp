@@ -64,7 +64,7 @@ Engine::Engine()
         }
     }
 
-    deviceManager.addAudioCallback (&player);
+    deviceManager.addAudioCallback (&recorder);
     deviceManager.addChangeListener (this);
 
     enableAllMidiInputs();
@@ -88,7 +88,8 @@ Engine::~Engine()
     saveSettings();
 
     deviceManager.removeMidiInputDeviceCallback ({}, this);
-    deviceManager.removeAudioCallback (&player);
+    recorder.stop();
+    deviceManager.removeAudioCallback (&recorder);
     deviceManager.removeChangeListener (this);
     knownPlugins.removeChangeListener (this);
 
@@ -136,6 +137,9 @@ void Engine::changeListenerCallback (ChangeBroadcaster* source)
     {
         // La scheda audio è cambiata: i canali di ingresso/uscita del grafo potrebbero essere diversi
         rewire();
+
+        // Frequenza o buffer possono essere cambiati: chiudi il file per non mescolare formati
+        recorder.stop();
 
         if (auto xml = deviceManager.createStateXml())
             props().setValue ("audioDevice", xml.get());

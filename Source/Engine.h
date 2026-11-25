@@ -6,6 +6,7 @@
 #include <functional>
 #include <optional>
 #include "Tuner.h"
+#include "Recorder.h"
 
 //==============================================================================
 /** Il motore: scheda audio, catena di plugin, pulsanti, MIDI, preset.
@@ -96,6 +97,9 @@ public:
     void setInputChannel (int channelIndex);
     int getNumDeviceInputs() const;
     juce::String getStatusText() const;
+
+    /** Registratore dell'uscita: salva un WAV nella cartella Download. */
+    Recorder& getRecorder()             { return recorder; }
     void saveSettings();
 
 private:
@@ -127,6 +131,7 @@ private:
     mutable juce::ApplicationProperties appProperties;
     juce::AudioProcessorGraph graph;
     juce::AudioProcessorPlayer player;
+    Recorder recorder { player };   // avvolge il player: è lui il callback della scheda audio
 
     NodeID inputNode, outputNode, tunerNode;
     TunerProcessor* tuner = nullptr;

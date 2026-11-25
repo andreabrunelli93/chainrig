@@ -37,7 +37,8 @@ target_sources(ChainRig PRIVATE
     Source/MainComponent.cpp
     Source/PluginChooser.cpp
     Source/PluginChooser.h
-    Source/PluginScanner.h)
+    Source/PluginScanner.h
+    Source/Recorder.h)
 
 target_compile_definitions(ChainRig PRIVATE
     JUCE_WEB_BROWSER=0

@@ -47,6 +47,13 @@ Le impostazioni sono salvate in `~/Library/Application Support/ChainRig/ChainRig
 
 > I preset fatti su Mac aperti su Windows ritrovano i plugin cercandoli per nome e identificativo. I percorsi dei file `.nam` e delle IR, invece, cambiano tra un sistema e l'altro: sul Surface dovrai ricaricarli una volta e risalvare il preset.
 
+## Registrare
+
+Il pulsante **REC** in alto registra quello che esce dalla scheda (canali 1-2, cioè la catena completa) in un file WAV
+stereo a 24 bit. Mentre registra diventa rosso e mostra il tempo. Toccalo di nuovo per fermare: il file viene salvato
+nella cartella **Download** con nome `ChainRig AAAA-MM-GG HH-MM-SS.wav`, e il percorso compare per qualche secondo
+nella barra in alto. Se cambi la scheda audio mentre registri, la registrazione viene chiusa e salvata.
+
 ## Primo avvio
 
 1. **IMPOSTAZIONI → Scheda audio**: su Windows scegli il tipo **ASIO**, su Mac **CoreAudio**, e poi la tua scheda (Gigboard o altra interfaccia). Imposta 48 kHz e un buffer di 64 o 128 campioni.
