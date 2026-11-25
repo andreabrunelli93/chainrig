@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include "PluginScanner.h"
 
 using namespace juce;
 
@@ -43,10 +44,21 @@ class ChainRigApplication final : public JUCEApplication
 public:
     const String getApplicationName() override       { return JUCE_APPLICATION_NAME_STRING; }
     const String getApplicationVersion() override    { return JUCE_APPLICATION_VERSION_STRING; }
-    bool moreThanOneInstanceAllowed() override       { return false; }
+    // La copia avviata per esaminare un plugin deve poter partire accanto a quella principale
+    bool moreThanOneInstanceAllowed() override       { return PluginScanner::isScannerProcess(); }
 
     void initialise (const String&) override
     {
+        if (PluginScanner::isScannerProcess())
+        {
+           #if JUCE_MAC
+            Process::setDockIconVisible (false);
+           #endif
+            setApplicationReturnValue (PluginScanner::runScannerProcess());
+            quit();
+            return;
+        }
+
         engine = std::make_unique<Engine>();
         mainWindow = std::make_unique<MainWindow> (*engine);
     }

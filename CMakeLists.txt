@@ -34,7 +34,8 @@ juce_add_gui_app(ChainRig
 target_sources(ChainRig PRIVATE
     Source/Main.cpp
     Source/Engine.cpp
-    Source/MainComponent.cpp)
+    Source/MainComponent.cpp
+    Source/PluginScanner.h)
 
 target_compile_definitions(ChainRig PRIVATE
     JUCE_WEB_BROWSER=0

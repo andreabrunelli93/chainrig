@@ -52,7 +52,9 @@ Le impostazioni sono salvate in `~/Library/Application Support/ChainRig/ChainRig
 1. **IMPOSTAZIONI → Scheda audio**: su Windows scegli il tipo **ASIO**, su Mac **CoreAudio**, e poi la tua scheda (Gigboard o altra interfaccia). Imposta 48 kHz e un buffer di 64 o 128 campioni.
 2. **IMPOSTAZIONI → Ingresso chitarra**: scegli l'ingresso a cui è collegata la chitarra.
 3. **IMPOSTAZIONI → Cerca / gestisci plugin → Opzioni → "Scan for new or updated VST3 plug-ins"**. La lista dei plugin viene salvata e non devi ripetere la scansione.
-   Se un plugin fa chiudere il programma durante la scansione, viene segnato e saltato la volta successiva.
+   Ogni plugin viene esaminato in un processo separato: se si blocca per più di 30 secondi o va in crash,
+   finisce tra gli esclusi e la scansione continua con il successivo, senza fermare ChainRig.
+   Gli esclusi si vedono e si possono riprovare dalla stessa finestra.
 4. Tocca un posto vuoto → **Scegli plugin**. Per esempio NAM nel posto 3, un caricatore di IR nel 4, Valhalla nel 7.
 5. **MODIFICA** → tocca un pulsante grande per rinominarlo e scegliere i posti che controlla. Poi tocca di nuovo **MODIFICA** per uscire.
 6. Tocca il nome del preset → **Salva come...**

@@ -1,4 +1,5 @@
 #include "Engine.h"
+#include "PluginScanner.h"
 
 using namespace juce;
 
@@ -25,6 +26,10 @@ Engine::Engine()
         knownPlugins.recreateFromXml (*xml);
 
     knownPlugins.addChangeListener (this);
+
+    // Ogni plugin viene esaminato in un processo separato: se si blocca o va in crash
+    // finisce tra gli esclusi e ChainRig continua
+    knownPlugins.setCustomScanner (std::make_unique<PluginScanner::OutOfProcessScanner>());
 
     inputChannel = props().getIntValue ("inputChannel", 0);
 

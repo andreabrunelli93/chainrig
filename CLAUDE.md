@@ -24,6 +24,10 @@ Nella catena l'utente userà: catture NAM A2 (plugin TONE3000 o NAM), IR, Valhal
   - Ogni posto salva la `PluginDescription` usata per crearlo: serve per i preset, perché quella dell'istanza VST3 punta al file `.so`/`.dll` interno e non al bundle.
   - Il MIDI viene ricevuto sul thread MIDI e passato al thread dell'interfaccia con `callAsync` + `WeakReference`.
   - Impostazioni in `ChainRig.settings`, con le chiavi `cc_button1..4`, `cc_tuner`, `cc_nextPreset`, `cc_prevPreset` e `midiMode`.
+- `Source/PluginScanner.h`: ricerca dei plugin fuori processo. `KnownPluginList::setCustomScanner` avvia
+  `ChainRig --scan-plugin <formato> <file> <risultato.xml>` per ogni file, con un timeout di 30 s. In caso di timeout o crash
+  il file finisce tra gli esclusi. La copia figlia non crea l'Engine, nasconde l'icona nel Dock e chiude subito.
+  Su questo Mac `WaveShell1-VST3 16.0` si blocca anche da solo.
 - `Source/Tuner.h`: nodo di passaggio, FIFO lock-free verso l'interfaccia, `detectPitchYin`, testato con errore sotto 0,1 cent da 82 Hz a 988 Hz a 44,1, 48 e 96 kHz.
 - `Source/MainComponent.*`: interfaccia touch con StageLookAndFeel scuro, SlotView, BigButton, TunerOverlay, PluginWindow sempre in primo piano (per la modalità schermo intero), menu a comparsa grandi.
 - `.github/workflows/build-windows.yml`: compila l'exe per Windows su GitHub Actions.
