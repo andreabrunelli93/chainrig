@@ -7,29 +7,30 @@ using namespace juce;
 PluginChooser::PluginChooser (Engine& e, std::function<void()> advanced)
     : Thread ("Ricerca plugin scelti"), engine (e), showAdvancedList (std::move (advanced))
 {
-    title.setText ("Spunta i plugin che vuoi usare dal vivo", dontSendNotification);
-    title.setFont (FontOptions (20.0f, Font::bold));
+    title.setText ("Scegli i plugin per il palco", dontSendNotification);
+    title.setFont (Fonts::display (28.0f));
     title.setColour (Label::textColourId, Palette::text);
     addAndMakeVisible (title);
 
-    summary.setFont (FontOptions (16.0f));
+    summary.setFont (Fonts::mono (13.0f));
     summary.setColour (Label::textColourId, Palette::textDim);
     addAndMakeVisible (summary);
 
-    filter.setFont (FontOptions (20.0f));
-    filter.setTextToShowWhenEmpty ("Filtra per nome (es. valhalla, tone)", Palette::textDim);
-    filter.setColour (TextEditor::backgroundColourId, Palette::panelLight);
+    filter.setFont (Fonts::text (20.0f));
+    filter.setIndents (16, 14);
+    filter.setTextToShowWhenEmpty ("Filtra per nome (es. valhalla, tone)", Palette::textFaint);
+    filter.setColour (TextEditor::backgroundColourId, Palette::background);
     filter.setColour (TextEditor::textColourId, Palette::text);
-    filter.setColour (TextEditor::outlineColourId, Palette::off);
+    filter.setColour (TextEditor::outlineColourId, Palette::borderLight);
     filter.onTextChange = [this] { applyFilter(); };
     addAndMakeVisible (filter);
 
-    listBox.setRowHeight (48);
-    listBox.setColour (ListBox::backgroundColourId, Palette::panel);
+    listBox.setRowHeight (60);
+    listBox.setColour (ListBox::backgroundColourId, Palette::cardOff);
     addAndMakeVisible (listBox);
 
     applyButton.setColour (TextButton::buttonColourId, Palette::accent);
-    applyButton.setColour (TextButton::textColourOffId, Colours::black);
+    applyButton.setColour (TextButton::textColourOffId, Palette::background);
     applyButton.onClick = [this] { apply(); };
     addAndMakeVisible (applyButton);
 
@@ -48,7 +49,7 @@ PluginChooser::PluginChooser (Engine& e, std::function<void()> advanced)
     addAndMakeVisible (noneButton);
 
     findFiles();
-    setSize (720, 640);
+    setSize (880, 760);
 }
 
 PluginChooser::~PluginChooser()
@@ -154,50 +155,65 @@ void PluginChooser::paintListBoxItem (int row, Graphics& g, int width, int heigh
         return;
 
     const auto& entry = entries.getReference (visibleRows[row]);
-    auto bounds = Rectangle<int> (width, height);
+    auto bounds = Rectangle<float> ((float) width, (float) height).reduced (6.0f, 3.0f);
 
-    if (row % 2 == 1)
-    {
-        g.setColour (Palette::panelLight.withAlpha (0.35f));
-        g.fillRect (bounds);
-    }
-
-    // casella
-    auto box = bounds.removeFromLeft (height).reduced (11).toFloat();
-    g.setColour (entry.chosen ? Palette::accent : Palette::off);
     if (entry.chosen)
     {
-        g.fillRoundedRectangle (box, 5.0f);
+        g.setColour (Palette::panelLight);
+        g.fillRoundedRectangle (bounds, 12.0f);
+        g.setColour (Palette::borderLight);
+        g.drawRoundedRectangle (bounds, 12.0f, 1.0f);
+    }
+
+    auto area = bounds.reduced (16.0f, 0.0f);
+
+    // casella
+    auto box = area.removeFromLeft (28.0f).withSizeKeepingCentre (28.0f, 28.0f);
+    if (entry.chosen)
+    {
+        g.setColour (Palette::accent);
+        g.fillRoundedRectangle (box, 7.0f);
         Path tick;
-        tick.startNewSubPath (box.getX() + box.getWidth() * 0.22f, box.getCentreY());
-        tick.lineTo (box.getX() + box.getWidth() * 0.42f, box.getBottom() - box.getHeight() * 0.25f);
-        tick.lineTo (box.getRight() - box.getWidth() * 0.2f, box.getY() + box.getHeight() * 0.25f);
-        g.setColour (Colours::black);
-        g.strokePath (tick, PathStrokeType (3.0f));
+        tick.startNewSubPath (box.getX() + 7.0f, box.getCentreY());
+        tick.lineTo (box.getX() + 12.0f, box.getBottom() - 8.0f);
+        tick.lineTo (box.getRight() - 6.0f, box.getY() + 8.0f);
+        g.setColour (Palette::background);
+        g.strokePath (tick, PathStrokeType (3.0f, PathStrokeType::curved, PathStrokeType::rounded));
     }
     else
     {
-        g.drawRoundedRectangle (box, 5.0f, 2.0f);
+        g.setColour (Palette::off);
+        g.drawRoundedRectangle (box.reduced (1.0f), 7.0f, 2.0f);
     }
+    area.removeFromLeft (16.0f);
 
-    // stato a destra
+    // cosa succede premendo APPLICA
     String status;
     Colour statusColour = Palette::textDim;
 
-    switch (entry.state)
+    if (entry.state == State::inList)
     {
-        case State::inList:   status = "nella lista"; statusColour = Palette::on; break;
-        case State::excluded: status = "escluso: si blocca o va in crash"; statusColour = Palette::danger; break;
-        case State::notInList: break;
+        status = entry.chosen ? "NELLA LISTA" : "DA TOGLIERE";
+        statusColour = entry.chosen ? Palette::on : Colour (0xffff8a7a);
+    }
+    else if (entry.chosen)
+    {
+        status = entry.state == State::excluded ? "DA RIPROVARE" : "DA AGGIUNGERE";
+        statusColour = Palette::accent;
+    }
+    else if (entry.state == State::excluded)
+    {
+        status = "ESCLUSO: SI BLOCCA O VA IN CRASH";
+        statusColour = Palette::danger;
     }
 
-    g.setFont (FontOptions (15.0f));
+    g.setFont (Fonts::display (11.0f));
     g.setColour (statusColour);
-    g.drawText (status, bounds.removeFromRight (260).withTrimmedRight (12), Justification::centredRight);
+    g.drawText (status, area.removeFromRight (280.0f), Justification::centredRight);
 
-    g.setFont (FontOptions (19.0f));
-    g.setColour (Palette::text);
-    g.drawText (entry.name, bounds.withTrimmedLeft (4), Justification::centredLeft, true);
+    g.setFont (Fonts::text (19.0f, entry.chosen));
+    g.setColour (entry.chosen ? Palette::text : Colour (0xffb9bcc3));
+    g.drawText (entry.name, area.withTrimmedRight (12.0f), Justification::centredLeft, true);
 }
 
 void PluginChooser::listBoxItemClicked (int row, const MouseEvent&)
@@ -331,19 +347,24 @@ void PluginChooser::setBusy (bool busy)
 //==============================================================================
 void PluginChooser::paint (Graphics& g)
 {
-    g.fillAll (Palette::panel);
+    g.fillAll (Palette::cardOff);
+
+    // linea sopra i pulsanti
+    g.setColour (Palette::border);
+    g.drawHorizontalLine (applyButton.getY() - 14, 24.0f, (float) getWidth() - 24.0f);
 }
 
 void PluginChooser::resized()
 {
-    auto area = getLocalBounds().reduced (16);
+    auto area = getLocalBounds().reduced (24);
 
-    title.setBounds (area.removeFromTop (32));
-    area.removeFromTop (8);
-    filter.setBounds (area.removeFromTop (44));
-    area.removeFromTop (8);
+    title.setBounds (area.removeFromTop (40));
+    area.removeFromTop (12);
+    filter.setBounds (area.removeFromTop (56));
+    area.removeFromTop (14);
 
     auto bottom = area.removeFromBottom (56);
+    area.removeFromBottom (14);
     applyButton.setBounds (bottom.removeFromRight (200));
     bottom.removeFromRight (12);
     advancedButton.setBounds (bottom.removeFromRight (150));

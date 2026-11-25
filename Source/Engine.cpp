@@ -230,6 +230,8 @@ void Engine::installInSlot (int slot, std::unique_ptr<AudioPluginInstance> insta
         slots[(size_t) slot].node = node->nodeID;
         slots[(size_t) slot].description = description;
         slots[(size_t) slot].userBypassed = false;
+        slots[(size_t) slot].customName.clear();
+        slots[(size_t) slot].kind = SlotKind::automatic;
     }
 }
 
@@ -248,6 +250,8 @@ void Engine::removeSlotNode (int slot, UpdateKind kind)
     graph.removeNode (*s.node, kind);
     s.node.reset();
     s.userBypassed = false;
+    s.customName.clear();
+    s.kind = SlotKind::automatic;
 }
 
 void Engine::clearSlot (int slot)
@@ -368,9 +372,150 @@ AudioProcessor* Engine::getSlotProcessor (int slot) const
 
 String Engine::getSlotName (int slot) const
 {
+    if (isSlotEmpty (slot))
+        return {};
+
+    const auto& custom = slots[(size_t) slot].customName;
+    return custom.isNotEmpty() ? custom : getSlotPluginName (slot);
+}
+
+String Engine::getSlotPluginName (int slot) const
+{
     if (auto* p = getSlotProcessor (slot))
         return p->getName();
     return {};
+}
+
+String Engine::getSlotManufacturer (int slot) const
+{
+    return isSlotEmpty (slot) ? String() : slots[(size_t) slot].description.manufacturerName;
+}
+
+String Engine::getSlotCustomName (int slot) const
+{
+    return isPositiveAndBelow (slot, numSlots) ? slots[(size_t) slot].customName : String();
+}
+
+void Engine::setSlotCustomName (int slot, const String& name)
+{
+    if (isSlotEmpty (slot))
+        return;
+
+    slots[(size_t) slot].customName = name.trim();
+    sendChangeMessage();
+}
+
+Engine::SlotKind Engine::getSlotKindSetting (int slot) const
+{
+    return isPositiveAndBelow (slot, numSlots) ? slots[(size_t) slot].kind : SlotKind::automatic;
+}
+
+Engine::SlotKind Engine::getSlotKind (int slot) const
+{
+    const auto kind = getSlotKindSetting (slot);
+    return kind == SlotKind::automatic ? guessSlotKind (slot) : kind;
+}
+
+void Engine::setSlotKind (int slot, SlotKind kind)
+{
+    if (isSlotEmpty (slot))
+        return;
+
+    slots[(size_t) slot].kind = kind;
+    sendChangeMessage();
+}
+
+Engine::SlotKind Engine::guessSlotKind (int slot) const
+{
+    if (isSlotEmpty (slot))
+        return SlotKind::fx;
+
+    const auto& d = slots[(size_t) slot].description;
+    const auto text = (d.category + " " + d.name + " " + d.descriptiveName).toLowerCase();
+
+    const auto has = [&text] (std::initializer_list<const char*> words)
+    {
+        for (auto* w : words)
+            if (text.contains (w))
+                return true;
+        return false;
+    };
+
+    // L'ordine conta: prima i nomi più specifici
+    if (has ({ "tone3000", "neural amp", " nam", "amp sim", "amplifier" }))  return SlotKind::amp;
+    if (has ({ "impulse", "cab", " ir ", "ir loader", "speaker" }))         return SlotKind::ir;
+    if (has ({ "reverb", "verb", "plate", "room", "hall", "shimmer", "supermassive", "bigsky", "crystalline" }))
+        return SlotKind::reverb;
+    if (has ({ "delay", "echo" }))                                          return SlotKind::delay;
+    if (has ({ "dynamics", "compress", "limit" }))                          return SlotKind::compressor;
+    if (has ({ "eq", "equal", "filter" }))                                  return SlotKind::eq;
+    if (has ({ "distort", "drive", "fuzz", "saturat", "overdrive" }))       return SlotKind::drive;
+    if (has ({ "modulat", "chorus", "flang", "phaser", "tremolo", "vibrato" })) return SlotKind::modulation;
+    if (has ({ "amp" }))                                                    return SlotKind::amp;
+    return SlotKind::fx;
+}
+
+String Engine::getSlotKindTag (SlotKind k)
+{
+    switch (k)
+    {
+        case SlotKind::amp:        return "AMP";
+        case SlotKind::ir:         return String::fromUTF8 ("CAB · IR");
+        case SlotKind::drive:      return "DRIVE";
+        case SlotKind::compressor: return "COMP";
+        case SlotKind::eq:         return "EQ";
+        case SlotKind::modulation: return "MOD";
+        case SlotKind::delay:      return "DELAY";
+        case SlotKind::reverb:     return "REVERB";
+        case SlotKind::fx:
+        case SlotKind::automatic:  break;
+    }
+    return "FX";
+}
+
+String Engine::getSlotKindName (SlotKind k)
+{
+    switch (k)
+    {
+        case SlotKind::automatic:  return "Automatico";
+        case SlotKind::amp:        return "Amplificatore";
+        case SlotKind::ir:         return "Cassa / IR";
+        case SlotKind::drive:      return "Drive / distorsore";
+        case SlotKind::compressor: return "Compressore";
+        case SlotKind::eq:         return "Equalizzatore";
+        case SlotKind::modulation: return "Modulazione";
+        case SlotKind::delay:      return "Delay";
+        case SlotKind::reverb:     return "Riverbero";
+        case SlotKind::fx:         break;
+    }
+    return "Altro effetto";
+}
+
+String Engine::getSlotKindId (SlotKind k)
+{
+    switch (k)
+    {
+        case SlotKind::amp:        return "amp";
+        case SlotKind::ir:         return "ir";
+        case SlotKind::drive:      return "drive";
+        case SlotKind::compressor: return "compressor";
+        case SlotKind::eq:         return "eq";
+        case SlotKind::modulation: return "modulation";
+        case SlotKind::delay:      return "delay";
+        case SlotKind::reverb:     return "reverb";
+        case SlotKind::fx:         return "fx";
+        case SlotKind::automatic:  break;
+    }
+    return "auto";
+}
+
+Engine::SlotKind Engine::getSlotKindFromId (const String& id)
+{
+    for (auto k : allSlotKinds)
+        if (getSlotKindId (k) == id)
+            return k;
+
+    return SlotKind::automatic;
 }
 
 bool Engine::getSlotUserBypass (int slot) const
@@ -595,10 +740,10 @@ String Engine::getStatusText() const
     const int totalLatency = buffer * 2 + device->getInputLatencyInSamples() + device->getOutputLatencyInSamples();
     const double ms = sr > 0 ? 1000.0 * totalLatency / sr : 0.0;
 
-    return device->getName()
-         + "  |  " + String (sr / 1000.0, 1) + " kHz, buffer " + String (buffer)
-         + "  |  ~" + String (ms, 1) + " ms"
-         + "  |  CPU " + String (roundToInt (deviceManager.getCpuUsage() * 100.0)) + "%";
+    // due righe: scheda e formato; latenza e CPU
+    return device->getName() + String::fromUTF8 ("  ·  ") + String (sr / 1000.0, 1).replace (".", ",") + String::fromUTF8 (" kHz  ·  buffer ") + String (buffer)
+         + "\nlatenza " + String (ms, 1).replace (".", ",") + String::fromUTF8 (" ms  ·  CPU ")
+         + String (roundToInt (deviceManager.getCpuUsage() * 100.0)) + "%";
 }
 
 //==============================================================================
@@ -637,6 +782,8 @@ bool Engine::savePreset (const File& fileIn)
             slotObj->setProperty ("name", p->getName());
             slotObj->setProperty ("state", state.toBase64Encoding());
             slotObj->setProperty ("bypassed", slots[(size_t) i].userBypassed);
+            slotObj->setProperty ("label", slots[(size_t) i].customName);
+            slotObj->setProperty ("kind", getSlotKindId (slots[(size_t) i].kind));
         }
         else
         {
@@ -721,6 +868,8 @@ bool Engine::loadPreset (const File& file, String& errors)
 
             installInSlot (i, std::move (instance), used, UpdateKind::none);
             slots[(size_t) i].userBypassed = (bool) s["bypassed"];
+            slots[(size_t) i].customName   = s["label"].toString();
+            slots[(size_t) i].kind         = getSlotKindFromId (s["kind"].toString());
         }
     }
 

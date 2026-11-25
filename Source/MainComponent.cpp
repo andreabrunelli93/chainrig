@@ -4,44 +4,38 @@
 using namespace juce;
 
 //==============================================================================
-StageLookAndFeel::StageLookAndFeel()
+namespace
 {
-    setColourScheme (LookAndFeel_V4::getMidnightColourScheme());
+    String twoDigits (int n)   { return String (n).paddedLeft ('0', 2); }
 
-    setColour (ResizableWindow::backgroundColourId, Palette::background);
-    setColour (TextButton::buttonColourId,          Palette::panelLight);
-    setColour (TextButton::buttonOnColourId,        Palette::accent);
-    setColour (TextButton::textColourOffId,         Palette::text);
-    setColour (TextButton::textColourOnId,          Colours::black);
-    setColour (Label::textColourId,                 Palette::textDim);
-    setColour (PopupMenu::backgroundColourId,       Palette::panel);
-    setColour (PopupMenu::textColourId,             Palette::text);
-    setColour (PopupMenu::highlightedBackgroundColourId, Palette::accent);
-    setColour (PopupMenu::highlightedTextColourId,  Colours::black);
-    setColour (PopupMenu::headerTextColourId,       Palette::accent);
-    setColour (AlertWindow::backgroundColourId,     Palette::panel);
-    setColour (AlertWindow::textColourId,           Palette::text);
-}
-
-Font StageLookAndFeel::getTextButtonFont (TextButton&, int buttonHeight)
-{
-    return Font (FontOptions (jmin (20.0f, (float) buttonHeight * 0.42f), Font::bold));
-}
-
-Font StageLookAndFeel::getPopupMenuFont()
-{
-    return Font (FontOptions (21.0f));
-}
-
-void StageLookAndFeel::getIdealPopupMenuItemSize (const String& text, bool isSeparator, int standardMenuItemHeight,
-                                                  int& idealWidth, int& idealHeight)
-{
-    LookAndFeel_V4::getIdealPopupMenuItemSize (text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight);
-
-    if (! isSeparator)
+    /** "posti 01 · 02", "posto 03" oppure "nessun posto". */
+    String describeSlots (Array<int> slots)
     {
-        idealHeight = jmax (idealHeight, 48);   // voci alte: facili da toccare
-        idealWidth  = jmax (idealWidth, 280);
+        if (slots.isEmpty())
+            return "nessun posto";
+
+        slots.sort();
+        StringArray parts;
+        for (auto s : slots)
+            parts.add (twoDigits (s + 1));
+
+        return (slots.size() == 1 ? "posto " : "posti ") + parts.joinIntoString (String::fromUTF8 (" · "));
+    }
+
+    void drawLed (Graphics& g, Rectangle<float> led, bool on, Colour colour)
+    {
+        if (on)
+        {
+            g.setColour (colour.withAlpha (0.3f));
+            g.fillEllipse (led.expanded (led.getWidth() * 0.45f));
+            g.setColour (colour);
+            g.fillEllipse (led);
+        }
+        else
+        {
+            g.setColour (Palette::off);
+            g.drawEllipse (led.reduced (1.0f), jmax (1.5f, led.getWidth() * 0.11f));
+        }
     }
 }
 
@@ -49,62 +43,122 @@ void StageLookAndFeel::getIdealPopupMenuItemSize (const String& text, bool isSep
 void SlotView::paint (Graphics& g)
 {
     auto& engine = owner.getEngine();
-    auto bounds = getLocalBounds().toFloat().reduced (2.0f);
+    auto bounds = getLocalBounds().toFloat().reduced (1.0f);
+    const auto number = twoDigits (index + 1);
 
-    const bool empty  = engine.isSlotEmpty (index);
-    const bool active = engine.isSlotActive (index);
-
-    if (empty)
+    if (engine.isSlotEmpty (index))
     {
-        g.setColour (Palette::panel);
-        g.fillRoundedRectangle (bounds, 12.0f);
-
         Path outline;
-        outline.addRoundedRectangle (bounds.reduced (4.0f), 10.0f);
-        const float dashes[] = { 8.0f, 6.0f };
+        outline.addRoundedRectangle (bounds.reduced (1.0f), 16.0f);
+        const float dashes[] = { 7.0f, 6.0f };
         PathStrokeType (1.5f).createDashedStroke (outline, outline, dashes, 2);
-        g.setColour (Palette::off);
+        g.setColour (Palette::borderLight);
         g.fillPath (outline);
 
-        g.setColour (Palette::textDim);
-        g.setFont (FontOptions (18.0f));
-        g.drawText ("+ vuoto", bounds, Justification::centred);
+        g.setColour (Palette::textFaint);
+        g.setFont (Fonts::mono (13.0f));
+        g.drawText (number, bounds.reduced (18.0f, 16.0f), Justification::topLeft);
+
+        const String label ("AGGIUNGI");
+        const auto font = Fonts::display (13.0f);
+        const float textW = GlyphArrangement::getStringWidth (font, label);
+        const float x = bounds.getCentreX() - (18.0f + 8.0f + textW) * 0.5f;
+
+        Icons::draw (g, Icons::Ui::plus, Rectangle<float> (18.0f, 18.0f).withCentre ({ x + 9.0f, bounds.getCentreY() }),
+                     Palette::textFaint);
+        g.setFont (font);
+        g.drawText (label, Rectangle<float> (textW + 2.0f, 20.0f).withPosition (x + 26.0f, bounds.getCentreY() - 10.0f),
+                    Justification::centredLeft, false);
+        return;
+    }
+
+    const bool active   = engine.isSlotActive (index);
+    const bool bypassed = engine.getSlotUserBypass (index);
+    const auto kind     = engine.getSlotKind (index);
+
+    // fondo: in rilievo se suona, piatto e scuro se no
+    if (active)
+        g.setGradientFill (ColourGradient (Palette::panelLight, 0.0f, bounds.getY(), Palette::card, 0.0f, bounds.getBottom(), false));
+    else
+        g.setColour (Palette::cardOff);
+
+    g.fillRoundedRectangle (bounds, 16.0f);
+    g.setColour (active ? Palette::borderLight : Palette::border);
+    g.drawRoundedRectangle (bounds, 16.0f, 1.0f);
+
+    if (active)   // linea luminosa in alto
+    {
+        auto line = Rectangle<float> (bounds.getX() + 18.0f, bounds.getY(), bounds.getWidth() - 36.0f, 3.0f);
+        g.setColour (Palette::accent.withAlpha (0.22f));
+        g.fillRoundedRectangle (line.expanded (4.0f, 2.0f).translated (0.0f, 2.0f), 4.0f);
+        g.setColour (Palette::accent);
+        g.fillRoundedRectangle (line, 1.5f);
+    }
+
+    auto area = bounds.reduced (18.0f, 16.0f);
+
+    // riga in alto: numero e tipo
+    auto topRow = area.removeFromTop (22.0f);
+    g.setColour (active ? Palette::textDim : Palette::textFaint);
+    g.setFont (Fonts::mono (13.0f));
+    g.drawText (number, topRow, Justification::centredLeft);
+
+    const auto tag = Engine::getSlotKindTag (kind);
+    const auto tagFont = Fonts::display (10.5f);
+    const float tagW = GlyphArrangement::getStringWidth (tagFont, tag) + 14.0f;
+    const auto tagBox = topRow.removeFromRight (tagW).withSizeKeepingCentre (tagW, 20.0f);
+
+    if (active)
+    {
+        g.setColour (Palette::text);
+        g.fillRoundedRectangle (tagBox, 4.0f);
+        g.setColour (Palette::background);
     }
     else
     {
-        g.setColour (active ? Palette::panelLight : Palette::panel);
-        g.fillRoundedRectangle (bounds, 12.0f);
-
-        // barra di stato in alto
-        auto bar = bounds.removeFromTop (8.0f).reduced (12.0f, 0.0f).withTrimmedLeft (22.0f).translated (0.0f, 10.0f);
-        g.setColour (active ? Palette::on : Palette::off);
-        g.fillRoundedRectangle (bar, 3.0f);
-
-        g.setColour (active ? Palette::text : Palette::textDim);
-        g.setFont (FontOptions (20.0f, Font::bold));
-        g.drawFittedText (engine.getSlotName (index), bounds.reduced (10.0f).toNearestInt(),
-                          Justification::centred, 3);
-
-        // chi lo controlla
-        String info;
-        if (engine.getSlotUserBypass (index))
-            info = "BYPASS";
-        else
-            for (int b = 0; b < Engine::numButtons; ++b)
-                if (engine.getButton (b).slots.contains (index))
-                    info << (info.isEmpty() ? "" : " + ") << engine.getButton (b).label;
-
-        if (info.isNotEmpty())
-        {
-            g.setFont (FontOptions (14.0f));
-            g.setColour (engine.getSlotUserBypass (index) ? Palette::danger : Palette::accent);
-            g.drawText (info, getLocalBounds().reduced (10, 8), Justification::centredBottom);
-        }
+        g.setColour (Palette::off);
+        g.drawRoundedRectangle (tagBox, 4.0f, 1.0f);
+        g.setColour (Palette::textDim);
     }
+    g.setFont (tagFont);
+    g.drawText (tag, tagBox, Justification::centred);
 
-    g.setColour (Palette::textDim);
-    g.setFont (FontOptions (15.0f, Font::bold));
-    g.drawText (String (index + 1), getLocalBounds().reduced (12, 12), Justification::topLeft);
+    // icona del tipo
+    area.removeFromTop (12.0f);
+    const float iconSize = jlimit (24.0f, 42.0f, area.getHeight() * 0.28f);
+    Icons::draw (g, kind, area.removeFromTop (iconSize).withWidth (iconSize),
+                 active ? Palette::text : Palette::textFaint, 1.6f);
+
+    // in basso: stato, poi sottotitolo e nome
+    auto statusRow = area.removeFromBottom (18.0f);
+    area.removeFromBottom (10.0f);
+
+    const auto custom = engine.getSlotCustomName (index);
+    const auto subtitle = custom.isNotEmpty() ? engine.getSlotPluginName (index) : engine.getSlotManufacturer (index);
+    g.setColour (active ? Palette::textDim : Palette::textFaint);
+    g.setFont (Fonts::text (13.5f));
+    g.drawText (subtitle, area.removeFromBottom (18.0f), Justification::centredLeft, true);
+
+    area.removeFromBottom (4.0f);
+    g.setColour (active ? Palette::text : Palette::textDim);
+    g.setFont (Fonts::display (jlimit (16.0f, 24.0f, area.getWidth() * 0.12f)));
+    g.drawFittedText (engine.getSlotName (index).toUpperCase(), area.toNearestInt(), Justification::bottomLeft, 2, 0.75f);
+
+    // stato, con i pedali che lo controllano
+    StringArray controllers;
+    for (int b = 0; b < Engine::numButtons; ++b)
+        if (engine.getButton (b).slots.contains (index))
+            controllers.add (engine.getButton (b).label.toUpperCase());
+
+    String status = bypassed ? "BYPASS" : (active ? "ATTIVO" : "SPENTO");
+    if (! controllers.isEmpty())
+        status << String::fromUTF8 ("  ·  ") << controllers.joinIntoString (" + ");
+
+    drawLed (g, Rectangle<float> (8.0f, 8.0f).withCentre ({ statusRow.getX() + 4.0f, statusRow.getCentreY() }),
+             active, Palette::accent);
+    g.setColour (active ? Palette::accent : Palette::textDim);
+    g.setFont (Fonts::display (11.0f));
+    g.drawText (status, statusRow.withTrimmedLeft (16.0f), Justification::centredLeft, true);
 }
 
 void SlotView::mouseUp (const MouseEvent& e)
@@ -116,43 +170,153 @@ void SlotView::mouseUp (const MouseEvent& e)
 //==============================================================================
 void BigButton::paint (Graphics& g)
 {
-    const auto& button = owner.getEngine().getButton (index);
-    auto bounds = getLocalBounds().toFloat().reduced (6.0f);
+    auto& engine = owner.getEngine();
+    const auto& button = engine.getButton (index);
+    auto bounds = getLocalBounds().toFloat().reduced (1.0f);
+    const bool on   = button.active;
+    const bool edit = owner.isEditMode();
 
-    g.setColour (button.active ? Palette::on.withAlpha (0.18f) : Palette::panel);
+    if (on)
+        g.setGradientFill (ColourGradient (Palette::warm, 0.0f, bounds.getY(), Colour (0xff16140f), 0.0f, bounds.getBottom(), false));
+    else
+        g.setColour (Palette::cardOff);
+
     g.fillRoundedRectangle (bounds, 18.0f);
+    g.setColour (edit ? Palette::accent : (on ? Palette::warmBorder : Palette::border));
+    g.drawRoundedRectangle (bounds, 18.0f, edit ? 2.0f : 1.0f);
 
-    g.setColour (button.active ? Palette::on : Palette::off);
-    g.drawRoundedRectangle (bounds, 18.0f, button.active ? 4.0f : 2.0f);
+    const float labelH = jlimit (22.0f, 36.0f, bounds.getHeight() * 0.18f);
+    const float blockH = 18.0f + 14.0f + labelH + 14.0f + 14.0f;
+    float y = bounds.getCentreY() - blockH * 0.5f;
 
-    // LED
-    const auto led = Rectangle<float> (22.0f, 22.0f).withCentre ({ bounds.getCentreX(), bounds.getY() + 34.0f });
-    g.setColour (button.active ? Palette::on : Palette::off);
-    g.fillEllipse (led);
-    if (button.active)
-    {
-        g.setColour (Palette::on.withAlpha (0.35f));
-        g.fillEllipse (led.expanded (8.0f));
-    }
+    drawLed (g, Rectangle<float> (18.0f, 18.0f).withCentre ({ bounds.getCentreX(), y + 9.0f }), on, Palette::accent);
+    y += 18.0f + 14.0f;
 
-    g.setColour (button.active ? Palette::text : Palette::textDim);
-    g.setFont (FontOptions (jmin (34.0f, bounds.getHeight() * 0.22f), Font::bold));
-    g.drawFittedText (button.label, bounds.reduced (12.0f).withTrimmedTop (40.0f).toNearestInt(),
-                      Justification::centred, 2);
+    g.setColour (on ? Colour (0xfff6efe2) : Palette::textDim);
+    g.setFont (Fonts::display (labelH));
+    g.drawFittedText (button.label.toUpperCase(),
+                      Rectangle<float> (bounds.getX() + 12.0f, y, bounds.getWidth() - 24.0f, labelH + 4.0f).toNearestInt(),
+                      Justification::centred, 1, 0.7f);
+    y += labelH + 14.0f;
 
-    if (owner.isEditMode())
-    {
-        g.setColour (Palette::accent);
-        g.setFont (FontOptions (15.0f));
-        const String hint = button.slots.isEmpty() ? "tocca per assegnare i posti"
-                                                   : "posti: " + [&] { auto sorted = button.slots; sorted.sort(); StringArray s; for (auto i : sorted) s.add (String (i + 1)); return s.joinIntoString (", "); }();
-        g.drawText (hint, bounds.reduced (10.0f).toNearestInt(), Justification::centredBottom);
-    }
+    String sub;
+    if (edit)
+        sub = button.slots.isEmpty() ? "tocca per assegnare i posti"
+                                     : describeSlots (button.slots) + String::fromUTF8 ("  ·  tocca per modificare");
+    else
+        sub = describeSlots (button.slots) + String::fromUTF8 ("  ·  CC ") + String (engine.getButtonCC (index));
+
+    g.setColour (edit ? Palette::accent : (on ? Palette::warmText : Palette::textFaint));
+    g.setFont (Fonts::mono (12.0f));
+    g.drawText (sub, Rectangle<float> (bounds.getX() + 8.0f, y, bounds.getWidth() - 16.0f, 16.0f), Justification::centred, true);
 }
 
 void BigButton::mouseDown (const MouseEvent&)
 {
     owner.bigButtonPressed (index);
+}
+
+//==============================================================================
+void PresetSelector::setPreset (const String& newName, int newNumber, int newTotal)
+{
+    if (newName == name && newNumber == number && newTotal == total)
+        return;
+
+    name = newName;
+    number = newNumber;
+    total = newTotal;
+    repaint();
+}
+
+int PresetSelector::zoneAt (Point<int> p) const
+{
+    if (p.x < 64)               return -1;
+    if (p.x > getWidth() - 64)  return 1;
+    return 0;
+}
+
+void PresetSelector::mouseDown (const MouseEvent& e)
+{
+    pressedZone = zoneAt (e.getPosition());
+    repaint();
+}
+
+void PresetSelector::mouseUp (const MouseEvent& e)
+{
+    const int zone = pressedZone;
+    pressedZone = -2;
+    repaint();
+
+    if (! getLocalBounds().contains (e.getPosition()) || zoneAt (e.getPosition()) != zone)
+        return;
+
+    if (zone == -1 && onPrev) onPrev();
+    if (zone == 1  && onNext) onNext();
+    if (zone == 0  && onMenu) onMenu();
+}
+
+void PresetSelector::paint (Graphics& g)
+{
+    auto bounds = getLocalBounds().toFloat().reduced (0.5f);
+
+    g.setColour (Palette::panel);
+    g.fillRoundedRectangle (bounds, 14.0f);
+
+    if (pressedZone >= -1)
+    {
+        auto zone = pressedZone == -1 ? bounds.withWidth (64.0f)
+                  : pressedZone == 1  ? bounds.withLeft (bounds.getRight() - 64.0f)
+                                      : bounds.reduced (64.0f, 0.0f);
+        g.saveState();
+        Path clip;
+        clip.addRoundedRectangle (bounds, 14.0f);
+        g.reduceClipRegion (clip);
+        g.setColour (Palette::panelLight);
+        g.fillRect (zone);
+        g.restoreState();
+    }
+
+    g.setColour (Palette::border);
+    g.drawRoundedRectangle (bounds, 14.0f, 1.0f);
+    g.drawVerticalLine (64, bounds.getY(), bounds.getBottom());
+    g.drawVerticalLine (getWidth() - 65, bounds.getY(), bounds.getBottom());
+
+    Icons::draw (g, Icons::Ui::prev, Rectangle<float> (22.0f, 22.0f).withCentre ({ 32.0f, bounds.getCentreY() }), Palette::text);
+    Icons::draw (g, Icons::Ui::next, Rectangle<float> (22.0f, 22.0f).withCentre ({ bounds.getRight() - 32.0f, bounds.getCentreY() }), Palette::text);
+
+    auto text = bounds.reduced (84.0f, 10.0f);
+    g.setColour (Palette::textDim);
+    g.setFont (Fonts::mono (11.0f));
+    g.drawText (number > 0 ? "PRESET " + twoDigits (number) + " / " + twoDigits (total) : String ("PRESET NON SALVATO"),
+                text.removeFromTop (16.0f), Justification::centredLeft);
+
+    g.setColour (Palette::text);
+    g.setFont (Fonts::display (22.0f));
+    g.drawFittedText (name.toUpperCase(), text.toNearestInt(), Justification::centredLeft, 1, 0.7f);
+}
+
+//==============================================================================
+void StatusDisplay::setLines (const String& first, const String& second, bool highlight)
+{
+    if (first == line1 && second == line2 && highlight == highlighted)
+        return;
+
+    line1 = first;
+    line2 = second;
+    highlighted = highlight;
+    repaint();
+}
+
+void StatusDisplay::paint (Graphics& g)
+{
+    auto area = getLocalBounds().toFloat().reduced (8.0f, 0.0f);
+    auto top = area.removeFromTop (area.getHeight() * 0.5f);
+
+    g.setFont (Fonts::mono (12.0f));
+    g.setColour (highlighted ? Palette::accent : Palette::text);
+    g.drawText (line1, top.withTrimmedBottom (2.0f), Justification::bottomRight, true);
+    g.setColour (Palette::textDim);
+    g.drawText (line2, area.withTrimmedTop (2.0f), Justification::topRight, true);
 }
 
 //==============================================================================
@@ -215,18 +379,55 @@ void TunerOverlay::timerCallback()
 
 void TunerOverlay::paint (Graphics& g)
 {
-    g.fillAll (Palette::background.withAlpha (0.97f));
+    const auto full = getLocalBounds().toFloat();
+    g.setGradientFill (ColourGradient (Colour (0xff14161a), full.getCentreX(), full.getHeight() * 0.42f,
+                                       Colour (0xff070809), full.getCentreX() + full.getWidth() * 0.6f, full.getHeight() * 0.42f, true));
+    g.fillAll();
 
-    auto area = getLocalBounds().reduced (40);
+    auto area = full.reduced (24.0f, 28.0f);
 
+    // intestazione: titolo a sinistra, "uscita muta" a destra
+    auto header = area.removeFromTop (40.0f);
+    Icons::draw (g, Icons::Ui::tuningFork, header.removeFromLeft (20.0f).withSizeKeepingCentre (20.0f, 20.0f), Palette::textDim, 1.8f);
+    header.removeFromLeft (10.0f);
     g.setColour (Palette::textDim);
-    g.setFont (FontOptions (18.0f));
-    g.drawText ("ACCORDATORE  -  uscita muta  -  tocca per chiudere", area.removeFromBottom (30), Justification::centred);
+    g.setFont (Fonts::display (12.0f));
+    g.drawText ("ACCORDATORE", header.withWidth (200.0f), Justification::centredLeft);
+
+    {
+        const String muted ("USCITA MUTA");
+        const auto font = Fonts::display (12.0f);
+        const float w = GlyphArrangement::getStringWidth (font, muted) + 16.0f + 10.0f + 32.0f;
+        auto pill = header.removeFromRight (w).withSizeKeepingCentre (w, 36.0f);
+        g.setColour (Colour (0xff2a1412));
+        g.fillRoundedRectangle (pill, 18.0f);
+        g.setColour (Colour (0xff5a2620));
+        g.drawRoundedRectangle (pill, 18.0f, 1.0f);
+        auto inner = pill.reduced (16.0f, 0.0f);
+        Icons::draw (g, Icons::Ui::mute, inner.removeFromLeft (16.0f).withSizeKeepingCentre (16.0f, 16.0f), Colour (0xffffb4a9), 2.0f);
+        inner.removeFromLeft (10.0f);
+        g.setColour (Colour (0xffffb4a9));
+        g.setFont (font);
+        g.drawText (muted, inner, Justification::centredLeft);
+    }
+
+    // pulsante in basso (tutto lo schermo chiude, ma così si vede)
+    auto closeRow = area.removeFromBottom (64.0f);
+    auto closeBox = closeRow.withSizeKeepingCentre (jmin (440.0f, closeRow.getWidth()), 64.0f);
+    g.setColour (Palette::panel);
+    g.fillRoundedRectangle (closeBox, 14.0f);
+    g.setColour (Palette::borderLight);
+    g.drawRoundedRectangle (closeBox, 14.0f, 1.0f);
+    g.setColour (Palette::text);
+    g.setFont (Fonts::display (15.0f));
+    g.drawText (String::fromUTF8 ("TOCCA PER CHIUDERE  ·  CC ") + String (engine.getTunerCC()), closeBox, Justification::centred);
+    area.removeFromBottom (24.0f);
 
     if (displayFreq <= 0.0f)
     {
-        g.setFont (FontOptions (40.0f));
-        g.drawText ("suona una corda", area, Justification::centred);
+        g.setColour (Palette::textDim);
+        g.setFont (Fonts::display (40.0f));
+        g.drawText ("SUONA UNA CORDA", area, Justification::centred);
         return;
     }
 
@@ -237,32 +438,121 @@ void TunerOverlay::paint (Graphics& g)
     const int nearest = roundToInt (midi);
     const float cents = (float) ((midi - nearest) * 100.0);
     const int noteIndex = ((nearest % 12) + 12) % 12;
-    const bool inTune = std::abs (cents) < 3.0f;
+    const int octave = nearest / 12 - 1;
+    const float absCents = std::abs (cents);
+    const auto colour = absCents < 3.0f ? Palette::on : (absCents < 15.0f ? Palette::accent : Palette::danger);
 
-    const auto colour = inTune ? Palette::on : (std::abs (cents) < 15.0f ? Palette::accent : Palette::danger);
+    // blocco centrale: nota, valori, scala, corde
+    const float noteSize = jmin (300.0f, area.getHeight() * 0.45f);
+    const float blockH = noteSize * 0.86f + 18.0f + 28.0f + 40.0f + 64.0f + 26.0f + 36.0f + 44.0f;
+    auto block = area.withSizeKeepingCentre (area.getWidth(), jmin (area.getHeight(), blockH));
 
-    auto top = area.removeFromTop (area.getHeight() / 2);
-    g.setColour (colour);
-    g.setFont (FontOptions ((float) top.getHeight() * 0.8f, Font::bold));
-    g.drawText (names[noteIndex], top, Justification::centred);
+    auto noteRow = block.removeFromTop (noteSize * 0.86f);
+    {
+        const String note (names[noteIndex]);
+        const auto noteFont = Fonts::display (noteSize);
+        const auto octFont = Fonts::display (noteSize * 0.24f, false);
+        const float noteW = GlyphArrangement::getStringWidth (noteFont, note);
+        const float octW = GlyphArrangement::getStringWidth (octFont, String (octave));
+        const float x = noteRow.getCentreX() - (noteW + 6.0f + octW) * 0.5f;
 
-    g.setColour (Palette::textDim);
-    g.setFont (FontOptions (24.0f));
-    g.drawText (String (namesIt[noteIndex]) + String (nearest / 12 - 1) + "   " + String (displayFreq, 1) + " Hz   "
-                    + (cents >= 0 ? "+" : "") + String (cents, 1) + " cent",
-                area.removeFromTop (40), Justification::centred);
+        g.setColour (colour);
+        g.setFont (noteFont);
+        g.drawText (note, Rectangle<float> (noteW + 4.0f, noteRow.getHeight()).withPosition (x, noteRow.getY()),
+                    Justification::centredLeft, false);
+        g.setColour (Palette::textDim);
+        g.setFont (octFont);
+        g.drawText (String (octave), Rectangle<float> (octW + 4.0f, noteSize * 0.3f).withPosition (x + noteW + 6.0f, noteRow.getY() + noteSize * 0.08f),
+                    Justification::centredLeft, false);
+    }
 
-    // barra -50 ... +50 cent
-    auto meter = area.removeFromTop (70).reduced (area.getWidth() / 8, 15).toFloat();
-    g.setColour (Palette::panel);
-    g.fillRoundedRectangle (meter, 8.0f);
+    block.removeFromTop (18.0f);
+    auto info = block.removeFromTop (28.0f);
+    {
+        const String left = String (namesIt[noteIndex]) + String::fromUTF8 ("  ·  ") + String (displayFreq, 2).replace (".", ",") + " Hz";
+        const String right = (cents >= 0.0f ? String ("+") : String (CharPointer_UTF8 ("\xe2\x88\x92")))
+                                + String (std::abs (cents), 1).replace (".", ",") + " cent";
+        g.setFont (Fonts::mono (20.0f));
+        g.setColour (Palette::textDim);
+        g.drawText (left, info.withRight (info.getCentreX() - 16.0f), Justification::centredRight);
+        g.setColour (colour);
+        g.drawText (right, info.withLeft (info.getCentreX() + 16.0f), Justification::centredLeft);
+    }
 
-    g.setColour (Palette::on.withAlpha (0.25f));
-    g.fillRect (meter.withSizeKeepingCentre (meter.getWidth() * 0.06f, meter.getHeight()));
+    // scala a segmenti da -50 a +50 cent (41 segmenti da 2,5 cent)
+    block.removeFromTop (40.0f);
+    auto scale = block.removeFromTop (64.0f).withSizeKeepingCentre (jmin (960.0f, area.getWidth() * 0.8f), 64.0f);
+    {
+        constexpr int numSegments = 41;
+        const float gap = 5.0f;
+        const float segW = (scale.getWidth() - gap * (numSegments - 1)) / numSegments;
+        const int lit = jlimit (0, numSegments - 1, roundToInt (cents / 2.5f) + numSegments / 2);
 
-    const float x = meter.getCentreX() + jlimit (-1.0f, 1.0f, cents / 50.0f) * meter.getWidth() * 0.5f;
-    g.setColour (colour);
-    g.fillRoundedRectangle (Rectangle<float> (10.0f, meter.getHeight() + 16.0f).withCentre ({ x, meter.getCentreY() }), 4.0f);
+        for (int i = 0; i < numSegments; ++i)
+        {
+            float h = 34.0f;
+            Colour c (0xff2a2d33);
+
+            if (i == 10 || i == 30)           { h = 46.0f; c = Palette::off; }
+            if (std::abs (i - lit) == 1)      { h = 40.0f; c = colour.withAlpha (0.4f); }
+            if (i == numSegments / 2)         { h = 64.0f; c = Palette::text; }
+            if (i == lit && i != numSegments / 2) { h = 52.0f; c = colour; }
+
+            auto seg = Rectangle<float> (scale.getX() + (float) i * (segW + gap), scale.getCentreY() - h * 0.5f, segW, h);
+
+            if (i == lit)
+            {
+                g.setColour (colour.withAlpha (0.3f));
+                g.fillRoundedRectangle (seg.expanded (3.0f), 4.0f);
+                if (i == numSegments / 2)
+                    c = colour;   // intonato: la tacca centrale si colora
+            }
+
+            g.setColour (c);
+            g.fillRoundedRectangle (seg, 2.0f);
+        }
+
+        block.removeFromTop (10.0f);
+        auto labels = block.removeFromTop (16.0f).withX (scale.getX()).withWidth (scale.getWidth());
+        g.setFont (Fonts::mono (13.0f));
+        const char* texts[] = { "-50", "-25", "0", "+25", "+50" };
+        for (int i = 0; i < 5; ++i)
+        {
+            const float x = labels.getX() + labels.getWidth() * (float) i / 4.0f;
+            g.setColour (i == 2 ? Palette::text : Palette::textFaint);
+            g.drawText (texts[i], Rectangle<float> (60.0f, labels.getHeight()).withCentre ({ x, labels.getCentreY() }), Justification::centred);
+        }
+    }
+
+    // corde dell'accordatura standard: si accende quella più vicina
+    block.removeFromTop (36.0f);
+    {
+        const int strings[] = { 40, 45, 50, 55, 59, 64 };   // E2 A2 D3 G3 B3 E4
+        const float chipW = 64.0f, chipGap = 10.0f;
+        auto row = block.removeFromTop (44.0f).withSizeKeepingCentre (6.0f * chipW + 5.0f * chipGap, 44.0f);
+
+        for (int i = 0; i < 6; ++i)
+        {
+            auto chip = Rectangle<float> (row.getX() + (float) i * (chipW + chipGap), row.getY(), chipW, 44.0f);
+            const bool match = strings[i] == nearest;
+
+            if (match)
+            {
+                g.setColour (colour);
+                g.fillRoundedRectangle (chip, 10.0f);
+                g.setColour (Palette::background);
+            }
+            else
+            {
+                g.setColour (Palette::borderLight);
+                g.drawRoundedRectangle (chip.reduced (0.5f), 10.0f, 1.0f);
+                g.setColour (Palette::textDim);
+            }
+
+            g.setFont (Fonts::display (18.0f));
+            g.drawText (names[strings[i] % 12], chip, Justification::centred);
+        }
+    }
 }
 
 void TunerOverlay::mouseUp (const MouseEvent&)
@@ -348,62 +638,72 @@ void OutputMeter::mouseDown (const MouseEvent&)
 
 void OutputMeter::paint (Graphics& g)
 {
-    auto bounds = getLocalBounds().toFloat();
-    g.setColour (Palette::panel);
-    g.fillRoundedRectangle (bounds, 10.0f);
+    auto bounds = getLocalBounds().toFloat().reduced (0.5f);
+    g.setColour (Palette::cardOff);
+    g.fillRoundedRectangle (bounds, 16.0f);
+    g.setColour (Palette::border);
+    g.drawRoundedRectangle (bounds, 16.0f, 1.0f);
 
-    auto area = bounds.reduced (6.0f);
+    auto area = bounds.reduced (10.0f, 12.0f);
 
-    // spia CLIP in alto
-    auto clipBox = area.removeFromTop (34.0f);
-    g.setColour (clipLatched ? Palette::danger : Palette::off.withAlpha (0.5f));
-    g.fillRoundedRectangle (clipBox, 6.0f);
+    // spia CLIP in alto: resta accesa finché non tocchi la barra
+    auto clipBox = area.removeFromTop (36.0f);
+    g.setColour (clipLatched ? Palette::danger : Colour (0xff1a1c20));
+    g.fillRoundedRectangle (clipBox, 8.0f);
+    if (! clipLatched)
+    {
+        g.setColour (Palette::off);
+        g.drawRoundedRectangle (clipBox.reduced (0.5f), 8.0f, 1.0f);
+    }
     g.setColour (clipLatched ? Colours::white : Palette::textDim);
-    g.setFont (FontOptions (14.0f, Font::bold));
+    g.setFont (Fonts::display (11.0f));
     g.drawText ("CLIP", clipBox, Justification::centred);
 
-    // picco massimo in dB, in basso
-    auto valueBox = area.removeFromBottom (24.0f);
+    // picco massimo in basso
+    auto valueBox = area.removeFromBottom (40.0f);
     const float maxDb = Decibels::gainToDecibels (maxPeak, -100.0f);
-    g.setColour (maxDb >= 0.0f ? Palette::danger : (maxDb > -6.0f ? Palette::accent : Palette::textDim));
-    g.setFont (FontOptions (14.0f));
-    g.drawText (maxPeak > 0.0f ? String (maxDb, 1) : String ("-inf"), valueBox, Justification::centred);
+    g.setColour (maxDb >= 0.0f ? Palette::danger : (maxDb > -6.0f ? Palette::accent : Palette::text));
+    g.setFont (Fonts::mono (15.0f));
+    g.drawText (maxPeak > 0.0f ? String (maxDb, 1).replace (".", ",") : String ("-inf"),
+                valueBox.removeFromTop (22.0f), Justification::centred);
+    g.setColour (Palette::textFaint);
+    g.setFont (Fonts::display (9.0f));
+    g.drawText ("PICCO dB", valueBox, Justification::centred);
 
-    area.removeFromTop (6.0f);
-    area.removeFromBottom (4.0f);
+    area.removeFromTop (10.0f);
+    area.removeFromBottom (10.0f);
 
-    // scala: tacche a 0, -6, -12, -24, -36 dB
-    g.setFont (FontOptions (10.0f));
-    for (float db : { 0.0f, -6.0f, -12.0f, -24.0f, -36.0f })
+    // due barre (L e R) a destra, scala a sinistra
+    const float barW = 12.0f, gap = 6.0f;
+    auto bars = area.removeFromRight (barW * 2.0f + gap);
+    area.removeFromRight (6.0f);
+
+    g.setFont (Fonts::mono (10.0f));
+    for (float db : { 0.0f, -6.0f, -12.0f, -24.0f, -36.0f, -48.0f })
     {
-        const float y = area.getBottom() - dbToMeter (db) * area.getHeight();
-        g.setColour (Palette::off);
-        g.drawHorizontalLine ((int) y, area.getX(), area.getRight());
+        const float y = bars.getBottom() - dbToMeter (db) * bars.getHeight();
+        g.setColour (Palette::textFaint);
+        g.drawText (String ((int) db), Rectangle<float> (area.getWidth(), 12.0f).withPosition (area.getX(), y - 6.0f),
+                    Justification::centredRight);
     }
-
-    // due barre (L e R)
-    const float gap = 4.0f;
-    const float barWidth = (area.getWidth() - gap) / 2.0f;
 
     for (int ch = 0; ch < 2; ++ch)
     {
-        auto bar = Rectangle<float> (area.getX() + (float) ch * (barWidth + gap), area.getY(), barWidth, area.getHeight());
-        g.setColour (Palette::background);
+        auto bar = Rectangle<float> (bars.getX() + (float) ch * (barW + gap), bars.getY(), barW, bars.getHeight());
+        g.setColour (Colour (0xff08090a));
         g.fillRoundedRectangle (bar, 3.0f);
 
         const float h = gainToMeter (level[ch]) * bar.getHeight();
         auto filled = bar.withTop (bar.getBottom() - h);
 
         // verde fino a -12, giallo fino a -3, rosso sopra
-        ColourGradient gradient (Palette::danger, bar.getX(), bar.getY(),
-                                 Palette::on, bar.getX(), bar.getBottom(), false);
-        gradient.addColour (1.0 - dbToMeter (-3.0f),  Palette::accent);
+        ColourGradient gradient (Palette::danger, bar.getX(), bar.getY(), Palette::on, bar.getX(), bar.getBottom(), false);
+        gradient.addColour (1.0 - dbToMeter (-3.0f),  Colour (0xfff2c14e));
         gradient.addColour (1.0 - dbToMeter (-12.0f), Palette::on);
         g.setGradientFill (gradient);
         g.fillRoundedRectangle (filled, 3.0f);
 
-        // tenuta del picco
-        if (hold[ch] > 0.0f)
+        if (hold[ch] > 0.0f)   // tenuta del picco
         {
             const float y = bar.getBottom() - gainToMeter (hold[ch]) * bar.getHeight();
             g.setColour (hold[ch] >= 1.0f ? Palette::danger : Palette::text);
@@ -418,22 +718,18 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
     setLookAndFeel (&lookAndFeel);
 
-    for (auto* b : { &prevButton, &nextButton, &presetButton, &tunerButton, &editButton, &settingsButton, &recButton })
-        addAndMakeVisible (b);
+    for (auto* c : std::initializer_list<Component*> { &presetSelector, &tunerButton, &recButton, &statusDisplay,
+                                                       &editButton, &settingsButton })
+        addAndMakeVisible (c);
 
-    prevButton.onClick     = [this] { engine.loadAdjacentPreset (-1); };
-    nextButton.onClick     = [this] { engine.loadAdjacentPreset (1); };
-    presetButton.onClick   = [this] { showPresetMenu(); };
+    presetSelector.onPrev  = [this] { engine.loadAdjacentPreset (-1); };
+    presetSelector.onNext  = [this] { engine.loadAdjacentPreset (1); };
+    presetSelector.onMenu  = [this] { showPresetMenu(); };
     tunerButton.onClick    = [this] { engine.setTunerActive (! engine.isTunerActive()); };
     editButton.onClick     = [this] { editMode = ! editMode; refresh(); };
     settingsButton.onClick = [this] { showSettingsMenu(); };
+    settingsButton.setTitle ("Impostazioni");
     recButton.onClick      = [this] { toggleRecording(); };
-    recButton.setColour (TextButton::buttonOnColourId, Palette::danger);
-    recButton.setColour (TextButton::textColourOnId, Colours::white);
-
-    statusLabel.setFont (FontOptions (15.0f));
-    statusLabel.setJustificationType (Justification::centredRight);
-    addAndMakeVisible (statusLabel);
 
     for (int i = 0; i < Engine::numSlots; ++i)
         addAndMakeVisible (slotViews.add (new SlotView (*this, i)));
@@ -447,8 +743,9 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     engine.onProcessorAboutToBeDeleted = [this] (AudioProcessor* p) { pluginWindows.erase (p); };
     engine.addChangeListener (this);
 
-    setSize (1280, 800);
+    setSize (1368, 912);   // Surface Pro 7 al 200%
     refresh();
+    updateStatus();
     startTimerHz (4);
 }
 
@@ -469,62 +766,83 @@ void MainComponent::paint (Graphics& g)
 {
     g.fillAll (Palette::background);
 
-    // freccette del flusso del segnale tra i posti
-    g.setColour (Palette::off);
-    for (int i = 0; i < Engine::numSlots - 1; ++i)
+    // intestazione della catena: titolo e riepilogo
+    int active = 0, bypassed = 0, empty = 0;
+    for (int i = 0; i < Engine::numSlots; ++i)
     {
-        if (i == Engine::numSlots / 2 - 1)
-            continue;   // fine riga
-
-        auto a = slotViews[i]->getBounds();
-        const float x = (float) a.getRight() + 2.0f;
-        const float y = (float) a.getCentreY();
-
-        Path arrow;
-        arrow.addTriangle (x, y - 7.0f, x, y + 7.0f, x + 9.0f, y);
-        g.fillPath (arrow);
+        if (engine.isSlotEmpty (i))              ++empty;
+        else if (engine.getSlotUserBypass (i))   ++bypassed;
+        else if (engine.isSlotActive (i))        ++active;
     }
+
+    auto header = chainHeader.toFloat().reduced (4.0f, 0.0f);
+    g.setColour (Palette::textDim);
+    g.setFont (Fonts::display (12.0f));
+    g.drawText ("CATENA DEL SEGNALE", header, Justification::centredLeft);
+
+    g.setFont (Fonts::mono (12.0f));
+    g.drawText (String (active) + " attivi  " + String::fromUTF8 ("·") + "  " + String (bypassed) + " in bypass  " + String::fromUTF8 ("·") + "  "
+                    + String (empty) + " vuoti",
+                header, Justification::centredRight);
 }
 
 void MainComponent::resized()
 {
-    auto area = getLocalBounds().reduced (12);
+    auto area = getLocalBounds();
+    area.removeFromLeft (24);
+    area.removeFromRight (24);
+    area.removeFromTop (20);
+    area.removeFromBottom (24);
 
     // barra superiore
-    auto top = area.removeFromTop (60);
-    prevButton.setBounds (top.removeFromLeft (64).reduced (3));
-    presetButton.setBounds (top.removeFromLeft (300).reduced (3));
-    nextButton.setBounds (top.removeFromLeft (64).reduced (3));
+    auto top = area.removeFromTop (68);
+    presetSelector.setBounds (top.removeFromLeft (jmin (460, top.getWidth() / 3)));
     top.removeFromLeft (12);
-    tunerButton.setBounds (top.removeFromLeft (180).reduced (3));
-    recButton.setBounds (top.removeFromLeft (130).reduced (3));
-    settingsButton.setBounds (top.removeFromRight (170).reduced (3));
-    editButton.setBounds (top.removeFromRight (140).reduced (3));
-    statusLabel.setBounds (top.reduced (8, 0));
+    tunerButton.setBounds (top.removeFromLeft (176));
+    top.removeFromLeft (12);
+    recButton.setBounds (top.removeFromLeft (150));
+    settingsButton.setBounds (top.removeFromRight (68));
+    top.removeFromRight (12);
+    editButton.setBounds (top.removeFromRight (132));
+    top.removeFromRight (4);
+    statusDisplay.setBounds (top);
 
-    area.removeFromTop (12);
+    area.removeFromTop (20);
 
-    // misuratore d'uscita sul lato destro, per tutta l'altezza
-    outputMeter.setBounds (area.removeFromRight (64));
-    area.removeFromRight (10);
-
-    // pulsanti grandi in basso
-    auto bottom = area.removeFromBottom (jmax (150, area.getHeight() * 32 / 100));
-    const int bw = bottom.getWidth() / Engine::numButtons;
+    // pedali in basso
+    auto pedals = area.removeFromBottom (jlimit (140, 210, getHeight() * 22 / 100));
+    const int gap = 14;
+    const int pw = (pedals.getWidth() - gap * (Engine::numButtons - 1)) / Engine::numButtons;
     for (int i = 0; i < Engine::numButtons; ++i)
-        bigButtons[i]->setBounds (bottom.removeFromLeft (bw));
+    {
+        bigButtons[i]->setBounds (pedals.removeFromLeft (pw));
+        pedals.removeFromLeft (gap);
+    }
 
-    area.removeFromBottom (10);
+    area.removeFromBottom (20);
 
-    // posti: due righe da cinque
+    // misuratore d'uscita a destra
+    outputMeter.setBounds (area.removeFromRight (84));
+    area.removeFromRight (20);
+
+    // catena: intestazione e due righe da cinque
+    chainHeader = area.removeFromTop (22);
+    area.removeFromTop (14);
+
     const int perRow = Engine::numSlots / 2;
-    const int rowHeight = area.getHeight() / 2;
+    const int sw = (area.getWidth() - gap * (perRow - 1)) / perRow;
+    const int sh = (area.getHeight() - gap) / 2;
+
     for (int row = 0; row < 2; ++row)
     {
-        auto rowArea = area.removeFromTop (rowHeight).reduced (0, 5);
-        const int sw = rowArea.getWidth() / perRow;
+        auto rowArea = area.removeFromTop (sh);
+        area.removeFromTop (gap);
+
         for (int c = 0; c < perRow; ++c)
-            slotViews[row * perRow + c]->setBounds (rowArea.removeFromLeft (sw).reduced (8, 0));
+        {
+            slotViews[row * perRow + c]->setBounds (rowArea.removeFromLeft (sw));
+            rowArea.removeFromLeft (gap);
+        }
     }
 
     tunerOverlay.setBounds (getLocalBounds());
@@ -539,11 +857,19 @@ void MainComponent::changeListenerCallback (ChangeBroadcaster*)
 void MainComponent::timerCallback()
 {
     updateRecButton();
+    updateStatus();
+}
 
+void MainComponent::updateStatus()
+{
     if (lastRecording != File() && Time::getMillisecondCounter() < lastRecordingShownUntil)
-        statusLabel.setText ("Salvato in Download: " + lastRecording.getFileName(), dontSendNotification);
-    else
-        statusLabel.setText (engine.getStatusText(), dontSendNotification);
+    {
+        statusDisplay.setLines ("Salvato in Download", lastRecording.getFileName(), true);
+        return;
+    }
+
+    const auto lines = StringArray::fromLines (engine.getStatusText());
+    statusDisplay.setLines (lines[0], lines[1], false);
 }
 
 void MainComponent::toggleRecording()
@@ -581,17 +907,20 @@ void MainComponent::updateRecButton()
     if (recording)
     {
         const int s = (int) recorder.getSeconds();
-        recButton.setButtonText (String::formatted ("REC %d:%02d", s / 60, s % 60));
+        recButton.setValueText (String::formatted ("%d:%02d", s / 60, s % 60));
     }
     else
     {
-        recButton.setButtonText ("REC");
+        recButton.setValueText ({});
     }
 }
 
 void MainComponent::refresh()
 {
-    presetButton.setButtonText (engine.getCurrentPresetName());
+    const auto files = engine.getPresetFiles();
+    const int number = files.indexOf (engine.getCurrentPresetFile()) + 1;
+    presetSelector.setPreset (engine.getCurrentPresetName(), number, files.size());
+
     tunerButton.setToggleState (engine.isTunerActive(), dontSendNotification);
     editButton.setToggleState (editMode, dontSendNotification);
 
@@ -621,12 +950,12 @@ void MainComponent::showSlotMenu (int slot)
     PopupMenu pluginMenu;
     KnownPluginList::addToMenu (pluginMenu, types, KnownPluginList::sortByManufacturer);
 
-    enum { openEditor = 1, toggleBypass, moveLeft, moveRight, removePlugin, scanPlugins };
+    enum { openEditor = 1, toggleBypass, renameSlot, moveLeft, moveRight, removePlugin, scanPlugins, kindBase = 200 };
 
     PopupMenu menu;
     menu.addSectionHeader ("Posto " + String (slot + 1) + (empty ? String() : " - " + engine.getSlotName (slot)));
 
-    if (types.isEmpty())
+    if (types.isEmpty() && empty)
     {
         menu.addItem (scanPlugins, "Nessun plugin nella lista: scegli plugin...");
     }
@@ -636,9 +965,23 @@ void MainComponent::showSlotMenu (int slot)
     }
     else
     {
+        // Tipo: decide icona ed etichetta. "Automatico" lo ricava dal plugin.
+        PopupMenu kindMenu;
+        const auto setting = engine.getSlotKindSetting (slot);
+        kindMenu.addItem (kindBase, "Automatico (" + Engine::getSlotKindName (engine.guessSlotKind (slot)) + ")",
+                          true, setting == Engine::SlotKind::automatic);
+        kindMenu.addSeparator();
+        for (auto k : Engine::allSlotKinds)
+            kindMenu.addItem (kindBase + (int) k, Engine::getSlotKindName (k), true, setting == k);
+
         menu.addItem (openEditor, "Apri interfaccia del plugin");
         menu.addItem (toggleBypass, engine.getSlotUserBypass (slot) ? "Riattiva" : "Bypass");
-        menu.addSubMenu ("Sostituisci con", pluginMenu);
+        menu.addSeparator();
+        menu.addItem (renameSlot, "Rinomina...");
+        menu.addSubMenu ("Tipo: " + Engine::getSlotKindName (engine.getSlotKind (slot)), kindMenu);
+        menu.addSeparator();
+        if (! types.isEmpty())
+            menu.addSubMenu ("Sostituisci con", pluginMenu);
         menu.addItem (moveLeft,  "Sposta indietro", slot > 0);
         menu.addItem (moveRight, "Sposta avanti",   slot < Engine::numSlots - 1);
         menu.addSeparator();
@@ -660,10 +1003,24 @@ void MainComponent::showSlotMenu (int slot)
             return;
         }
 
+        if (result >= kindBase && result <= kindBase + (int) Engine::SlotKind::fx)
+        {
+            engine.setSlotKind (slot, (Engine::SlotKind) (result - kindBase));
+            return;
+        }
+
         switch (result)
         {
             case openEditor:   openPluginWindow (engine.getSlotProcessor (slot)); break;
             case toggleBypass: engine.setSlotUserBypass (slot, ! engine.getSlotUserBypass (slot)); break;
+            case renameSlot:
+                askText ("Nome del posto (lascia vuoto per usare il nome del plugin)", engine.getSlotName (slot),
+                         [this, slot] (String text)
+                         {
+                             engine.setSlotCustomName (slot, text == engine.getSlotPluginName (slot) ? String() : text);
+                         },
+                         true);
+                break;
             case moveLeft:     engine.swapSlots (slot, slot - 1); break;
             case moveRight:    engine.swapSlots (slot, slot + 1); break;
             case removePlugin: engine.clearSlot (slot); break;
@@ -736,7 +1093,7 @@ void MainComponent::showPresetMenu()
             menu.addItem (presetBase + i, files[i].getFileNameWithoutExtension(), true, files[i] == current);
     }
 
-    menu.showMenuAsync (PopupMenu::Options().withTargetComponent (presetButton),
+    menu.showMenuAsync (PopupMenu::Options().withTargetComponent (presetSelector),
                         [this, files] (int result)
     {
         if (result == save)
@@ -883,7 +1240,8 @@ void MainComponent::openPluginWindow (AudioProcessor* processor)
     });
 }
 
-void MainComponent::askText (const String& title, const String& initial, std::function<void (String)> onOk)
+void MainComponent::askText (const String& title, const String& initial, std::function<void (String)> onOk,
+                             bool allowEmpty)
 {
     textInput = std::make_unique<AlertWindow> (title, String(), MessageBoxIconType::NoIcon);
     textInput->addTextEditor ("text", initial);
@@ -892,7 +1250,7 @@ void MainComponent::askText (const String& title, const String& initial, std::fu
     textInput->setAlwaysOnTop (true);
 
     SafePointer<MainComponent> safeThis (this);
-    textInput->enterModalState (true, ModalCallbackFunction::create ([safeThis, onOk] (int result)
+    textInput->enterModalState (true, ModalCallbackFunction::create ([safeThis, onOk, allowEmpty] (int result)
     {
         if (safeThis == nullptr || safeThis->textInput == nullptr)
             return;
@@ -900,7 +1258,7 @@ void MainComponent::askText (const String& title, const String& initial, std::fu
         const auto text = safeThis->textInput->getTextEditorContents ("text").trim();
         safeThis->textInput->setVisible (false);
 
-        if (result == 1 && text.isNotEmpty())
+        if (result == 1 && (text.isNotEmpty() || allowEmpty))
             onOk (text);
     }), false);
 }

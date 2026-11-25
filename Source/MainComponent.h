@@ -1,38 +1,13 @@
 #pragma once
 
 #include "Engine.h"
+#include "Look.h"
 #include <map>
-
-//==============================================================================
-/** Aspetto scuro con testi e menu grandi, pensato per il touch sul palco. */
-class StageLookAndFeel final : public juce::LookAndFeel_V4
-{
-public:
-    StageLookAndFeel();
-
-    juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override;
-    juce::Font getPopupMenuFont() override;
-    void getIdealPopupMenuItemSize (const juce::String& text, bool isSeparator, int standardMenuItemHeight,
-                                    int& idealWidth, int& idealHeight) override;
-};
-
-//==============================================================================
-namespace Palette
-{
-    const juce::Colour background   { 0xff121419 };
-    const juce::Colour panel        { 0xff1e2129 };
-    const juce::Colour panelLight   { 0xff2a2e38 };
-    const juce::Colour text         { 0xffe8e9ed };
-    const juce::Colour textDim      { 0xff8a8f9c };
-    const juce::Colour on           { 0xff3ddc84 };
-    const juce::Colour off          { 0xff4a4f5c };
-    const juce::Colour accent       { 0xffffb347 };
-    const juce::Colour danger       { 0xffff5c5c };
-}
 
 class MainComponent;
 
 //==============================================================================
+/** Un posto della catena: numero, tipo con icona, nome, stato (attivo / bypass / spento). */
 class SlotView final : public juce::Component
 {
 public:
@@ -46,6 +21,7 @@ private:
 };
 
 //==============================================================================
+/** Uno dei 4 pedali grandi: LED, nome, posti controllati e CC. */
 class BigButton final : public juce::Component
 {
 public:
@@ -56,6 +32,39 @@ public:
 private:
     MainComponent& owner;
     const int index;
+};
+
+//==============================================================================
+/** Preset: freccia indietro | numero e nome | freccia avanti, in un unico pannello. */
+class PresetSelector final : public juce::Component
+{
+public:
+    std::function<void()> onPrev, onNext, onMenu;
+
+    void setPreset (const juce::String& name, int number, int total);
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+
+private:
+    int zoneAt (juce::Point<int>) const;   // -1 indietro, 0 nome, 1 avanti
+
+    juce::String name;
+    int number = 0, total = 0;
+    int pressedZone = -2;
+};
+
+//==============================================================================
+/** Scheda audio e latenza, su due righe compatte allineate a destra. */
+class StatusDisplay final : public juce::Component
+{
+public:
+    void setLines (const juce::String& first, const juce::String& second, bool highlight);
+    void paint (juce::Graphics&) override;
+
+private:
+    juce::String line1, line2;
+    bool highlighted = false;
 };
 
 //==============================================================================
@@ -134,24 +143,31 @@ private:
     void refresh();
     void showPresetMenu();
     void showSettingsMenu();
-    void toggleRecording();
-    void updateRecButton();
     void showBigButtonEditMenu (int index);
     void showAudioSettings();
     void showPluginChooser();
     void showPluginList();
     void openPluginWindow (juce::AudioProcessor*);
-    void askText (const juce::String& title, const juce::String& initial, std::function<void (juce::String)> onOk);
+    void askText (const juce::String& title, const juce::String& initial, std::function<void (juce::String)> onOk,
+                  bool allowEmpty = false);
     void showError (const juce::String& title, const juce::String& message);
     void launchDialog (const juce::String& title, juce::Component* content);
+    void toggleRecording();
+    void updateRecButton();
+    void updateStatus();
 
     StageLookAndFeel lookAndFeel;   // deve vivere più a lungo di tutti i componenti figli
     Engine& engine;
     bool editMode = false;
 
-    juce::TextButton prevButton { "<" }, nextButton { ">" }, presetButton, tunerButton { "ACCORDATORE" },
-                     editButton { "MODIFICA" }, settingsButton { "IMPOSTAZIONI" }, recButton { "REC" };
-    juce::Label statusLabel;
+    PresetSelector presetSelector;
+    StageButton tunerButton    { "ACCORDATORE", Icons::Ui::tuningFork },
+                recButton      { "REC", std::nullopt, StageButton::Style::record },
+                editButton     { "MODIFICA" },
+                settingsButton { "", Icons::Ui::settings };
+    StatusDisplay statusDisplay;
+    juce::Rectangle<int> chainHeader;      // "CATENA DEL SEGNALE" e riepilogo
+
     juce::File lastRecording;              // ultimo file salvato, mostrato per qualche secondo
     juce::uint32 lastRecordingShownUntil = 0;
 

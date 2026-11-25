@@ -13,6 +13,7 @@ Focusrite, driver ASIO). Lo sviluppo e le prove si fanno su un MacBook Pro con A
 - 4 pulsanti touch grandi che accendono o spengono i posti assegnati, comandabili anche da pedaliera MIDI (CC).
 - Preset in file JSON.
 - Bassa latenza (ASIO su Windows).
+- Rinominare i posti e sceglierne il tipo, che decide icona ed etichetta (aggiunto su richiesta dell'utente).
 - Barra laterale con il livello d'uscita e la spia CLIP, che resta accesa fino al tocco (aggiunta su richiesta dell'utente).
 - Pulsante REC: registra l'uscita in WAV nella cartella Download (aggiunto su richiesta dell'utente).
 
@@ -23,6 +24,7 @@ Nella catena l'utente userà: catture NAM A2 (plugin TONE3000 o NAM), IR, Valhal
   Il grafo va da ingresso → TunerProcessor → posti → uscita (solo canali 1-2).
   - Le modifiche alla struttura si fanno con `UpdateKind::none` e poi `rewire()`, che chiama `graph.rebuild()`.
   - Il bypass è `Node::setBypassed`.
+  - Ogni posto ha `customName` e `SlotKind` (amp, ir, drive, compressor, eq, modulation, delay, reverb, fx oppure automatic, che viene ricavato da categoria e nome). Nei preset sono le chiavi `label` e `kind`.
   - Ogni posto salva la `PluginDescription` usata per crearlo: serve per i preset, perché quella dell'istanza VST3 punta al file `.so`/`.dll` interno e non al bundle.
   - Il MIDI viene ricevuto sul thread MIDI e passato al thread dell'interfaccia con `callAsync` + `WeakReference`.
   - Impostazioni in `ChainRig.settings`, con le chiavi `cc_button1..4`, `cc_tuner`, `cc_nextPreset`, `cc_prevPreset` e `midiMode`.
@@ -38,7 +40,9 @@ Nella catena l'utente userà: catture NAM A2 (plugin TONE3000 o NAM), IR, Valhal
   il file finisce tra gli esclusi. La copia figlia non crea l'Engine, nasconde l'icona nel Dock e chiude subito.
   Su questo Mac `WaveShell1-VST3 16.0` si blocca anche da solo.
 - `Source/Tuner.h`: nodo di passaggio, FIFO lock-free verso l'interfaccia, `detectPitchYin`, testato con errore sotto 0,1 cent da 82 Hz a 988 Hz a 44,1, 48 e 96 kHz.
-- `Source/MainComponent.*`: interfaccia touch con StageLookAndFeel scuro, SlotView, BigButton, TunerOverlay, PluginWindow sempre in primo piano (per la modalità schermo intero), menu a comparsa grandi.
+- `Source/Look.*`: Palette (grafite e un solo accento ambra), Fonts (di sistema: Bahnschrift su Windows, Avenir Next su Mac, Consolas/Menlo per i numeri), Icons (tracciati 24x24 per i tipi di posto e per l'interfaccia), StageLookAndFeel, StageButton. Il design di riferimento è nell'artifact "ChainRig – nuovo design" (1368x912 = Surface Pro 7 al 200%).
+- `Source/MainComponent.*`: interfaccia touch: PresetSelector, StatusDisplay (due righe), SlotView (numero, tipo con icona, nome, stato), BigButton (pedali con LED), OutputMeter, TunerOverlay (nota grande, scala a 41 segmenti, corde), PluginWindow sempre in primo piano (per la modalità schermo intero), menu a comparsa grandi.
+  - I letterali con caratteri non ASCII (per esempio "·") vanno passati con `String::fromUTF8`: `String(const char*)` li legge come ASCII.
 - `.github/workflows/build-windows.yml`: compila l'exe per Windows su GitHub Actions.
 
 ## Compilare

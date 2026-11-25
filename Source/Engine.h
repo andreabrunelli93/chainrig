@@ -31,6 +31,17 @@ public:
 
     enum class MidiMode { momentary, absolute };
 
+    /** Che cosa fa un posto: decide l'icona e l'etichetta. "automatic" lo ricava dal plugin. */
+    enum class SlotKind { automatic, amp, ir, drive, compressor, eq, modulation, delay, reverb, fx };
+    static constexpr SlotKind allSlotKinds[] = { SlotKind::amp, SlotKind::ir, SlotKind::drive, SlotKind::compressor,
+                                                 SlotKind::eq, SlotKind::modulation, SlotKind::delay,
+                                                 SlotKind::reverb, SlotKind::fx };
+
+    static juce::String getSlotKindTag (SlotKind);    // breve, per l'etichetta: "AMP", "CAB · IR"...
+    static juce::String getSlotKindName (SlotKind);   // per i menu: "Amplificatore"...
+    static juce::String getSlotKindId (SlotKind);     // nei preset: "amp", "ir"...
+    static SlotKind getSlotKindFromId (const juce::String&);
+
     Engine();
     ~Engine() override;
 
@@ -54,7 +65,15 @@ public:
 
     bool isSlotEmpty (int slot) const;
     juce::AudioProcessor* getSlotProcessor (int slot) const;
-    juce::String getSlotName (int slot) const;
+    juce::String getSlotName (int slot) const;            // nome scelto dall'utente, altrimenti quello del plugin
+    juce::String getSlotPluginName (int slot) const;
+    juce::String getSlotManufacturer (int slot) const;
+    juce::String getSlotCustomName (int slot) const;
+    void setSlotCustomName (int slot, const juce::String& name);
+    SlotKind getSlotKind (int slot) const;                // risolto: mai "automatic"
+    SlotKind getSlotKindSetting (int slot) const;         // come l'ha scelto l'utente (anche "automatic")
+    SlotKind guessSlotKind (int slot) const;              // ricavato da categoria e nome del plugin
+    void setSlotKind (int slot, SlotKind);
     bool getSlotUserBypass (int slot) const;
     void setSlotUserBypass (int slot, bool bypassed);
     bool isSlotActive (int slot) const;          // suona davvero (né bypass né pulsante spento)
@@ -108,6 +127,8 @@ private:
         std::optional<juce::AudioProcessorGraph::NodeID> node;
         juce::PluginDescription description;   // quella usata per crearlo (salvata nei preset)
         bool userBypassed = false;
+        juce::String customName;               // vuoto = nome del plugin
+        SlotKind kind = SlotKind::automatic;
     };
 
     using NodeID = juce::AudioProcessorGraph::NodeID;

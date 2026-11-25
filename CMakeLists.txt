@@ -35,6 +35,8 @@ target_sources(ChainRig PRIVATE
     Source/Main.cpp
     Source/Engine.cpp
     Source/MainComponent.cpp
+    Source/Look.cpp
+    Source/Look.h
     Source/PluginChooser.cpp
     Source/PluginChooser.h
     Source/PluginScanner.h
