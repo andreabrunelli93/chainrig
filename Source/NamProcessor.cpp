@@ -524,6 +524,50 @@ namespace
     }
 }
 
+/** Interruttore con spia, come i pedali: spia ambra se acceso, grigia se spento. */
+class ToggleChip final : public Button
+{
+public:
+    explicit ToggleChip (const String& text) : Button (text)
+    {
+        setClickingTogglesState (true);
+    }
+
+    void paintButton (Graphics& g, bool isMouseOver, bool isDown) override
+    {
+        const bool on = getToggleState();
+        auto bounds = getLocalBounds().toFloat().reduced (0.5f);
+
+        g.setColour (on ? Palette::warm : Palette::cardOff);
+        g.fillRoundedRectangle (bounds, 10.0f);
+        g.setColour (on ? Palette::warmBorder : (isMouseOver ? Palette::borderLight.brighter (0.2f) : Palette::borderLight));
+        g.drawRoundedRectangle (bounds, 10.0f, 1.0f);
+
+        if (isDown)
+        {
+            g.setColour (Colours::white.withAlpha (0.05f));
+            g.fillRoundedRectangle (bounds, 10.0f);
+        }
+
+        auto r = getLocalBounds().reduced (14, 0);
+        const auto led = r.removeFromLeft (10).toFloat().withSizeKeepingCentre (9.0f, 9.0f);
+
+        if (on)
+        {
+            g.setColour (Palette::accent.withAlpha (0.25f));
+            g.fillEllipse (led.expanded (4.0f));
+        }
+
+        g.setColour (on ? Palette::accent : Palette::off);
+        g.fillEllipse (led);
+
+        r.removeFromLeft (10);
+        g.setFont (Fonts::display (13.0f));
+        g.setColour (on ? Palette::text : Palette::textDim);
+        g.drawText (getButtonText(), r, Justification::centredLeft);
+    }
+};
+
 class NamEditor final : public AudioProcessorEditor,
                         private Timer
 {
@@ -541,10 +585,7 @@ public:
         clearIrButton.setTitle ("Remove IR");
 
         for (auto* t : { &normalizeToggle, &liteToggle, &irToggle })
-        {
-            t->setClickingTogglesState (true);
             addAndMakeVisible (t);
-        }
 
         normalizeToggle.onClick = [this] { nam.normalize->set (normalizeToggle.getToggleState() ? 1.0f : 0.0f); };
         irToggle.onClick        = [this] { nam.irEnabled->set (irToggle.getToggleState() ? 1.0f : 0.0f); };
@@ -562,7 +603,7 @@ public:
 
         refresh();
         startTimerHz (10);   // parametri cambiati da fuori (preset, MIDI)
-        setSize (760, 500);
+        setSize (780, 540);
     }
 
     ~NamEditor() override
@@ -584,7 +625,7 @@ public:
         {
             auto r = modelCard.reduced (18, 12);
             r.removeFromTop (22);
-            auto text = r.withTrimmedRight (330);
+            auto text = r.withTrimmedRight (buttonColumn + 20);
 
             g.setFont (Fonts::text (22.0f, true));
             g.setColour (nam.isModelMissing() ? Palette::danger : (nam.getModelFile() == File() ? Palette::textFaint : Palette::text));
@@ -615,7 +656,7 @@ public:
         {
             auto r = irCard.reduced (18, 12);
             r.removeFromTop (22);
-            auto text = r.withTrimmedRight (330);
+            auto text = r.withTrimmedRight (buttonColumn + 20);
             const auto file = nam.getImpulseResponseFile();
 
             g.setFont (Fonts::text (19.0f, true));
@@ -653,33 +694,40 @@ public:
         auto area = getLocalBounds().reduced (20);
         area.removeFromBottom (12);
 
-        modelCard = area.removeFromTop (130);
+        modelCard = area.removeFromTop (cardHeight);
         area.removeFromTop (12);
-        irCard = area.removeFromTop (130);
+        irCard = area.removeFromTop (cardHeight);
         area.removeFromTop (12);
         levelCard = area;
 
-        const auto placeButtons = [] (juce::Rectangle<int> card, Component& load, Component& clear, Component* toggleA, Component* toggleB)
+        // a destra CARICA e togli, centrati; a sinistra, sotto i nomi, gli interruttori
+        const auto place = [] (juce::Rectangle<int> card, Component& load, Component& clear,
+                               std::initializer_list<Button*> toggles)
         {
             auto r = card.reduced (18, 14);
-            r.removeFromTop (20);
-            auto row = r.removeFromTop (48).removeFromRight (310);
-            clear.setBounds (row.removeFromRight (48));
-            row.removeFromRight (8);
-            load.setBounds (row);
+            r.removeFromTop (20);   // titolo
 
-            auto toggles = r.removeFromBottom (34).removeFromRight (310);
-            if (toggleB != nullptr)
+            auto buttons = r.removeFromRight (buttonColumn).withSizeKeepingCentre (buttonColumn, 52);
+            if (clear.isVisible())   // senza niente da togliere, CARICA occupa tutta la colonna
             {
-                toggleB->setBounds (toggles.removeFromRight (150));
-                toggles.removeFromRight (10);
+                clear.setBounds (buttons.removeFromRight (52));
+                buttons.removeFromRight (8);
             }
-            if (toggleA != nullptr)
-                toggleA->setBounds (toggles.removeFromRight (150));
+            load.setBounds (buttons);
+
+            auto row = r.removeFromBottom (38);
+            for (auto* t : toggles)
+            {
+                if (! t->isVisible())
+                    continue;
+                const auto textWidth = GlyphArrangement::getStringWidth (Fonts::display (13.0f), t->getButtonText());
+                t->setBounds (row.removeFromLeft (jmax (120, roundToInt (textWidth) + 60)));
+                row.removeFromLeft (10);
+            }
         };
 
-        placeButtons (modelCard, loadModelButton, clearModelButton, &normalizeToggle, &liteToggle);
-        placeButtons (irCard, loadIrButton, clearIrButton, &irToggle, nullptr);
+        place (modelCard, loadModelButton, clearModelButton, { &normalizeToggle, &liteToggle });
+        place (irCard, loadIrButton, clearIrButton, { &irToggle });
 
         auto knobs = levelCard.reduced (18, 12);
         knobs.removeFromTop (14);
@@ -711,13 +759,18 @@ private:
 
     void refresh()
     {
+        // si vede solo quello che serve: niente interruttori senza cattura o senza IR
         const auto& info = nam.getModelInfo();
-        liteToggle.setVisible (info.slimmable);
+        const bool hasModel = nam.getModelFile() != File() && ! nam.isModelMissing();
+        const bool hasIr = nam.getImpulseResponseFile() != File();
+
+        normalizeToggle.setVisible (hasModel && info.hasLoudness);
+        liteToggle.setVisible (hasModel && info.slimmable);
         liteToggle.setToggleState (nam.isLite(), dontSendNotification);
-        clearModelButton.setEnabled (nam.getModelFile() != File());
-        clearIrButton.setEnabled (nam.getImpulseResponseFile() != File());
-        normalizeToggle.setEnabled (info.hasLoudness);
-        irToggle.setEnabled (nam.getImpulseResponseFile() != File());
+        irToggle.setVisible (hasIr && ! nam.isImpulseResponseMissing());
+        clearModelButton.setVisible (nam.getModelFile() != File());
+        clearIrButton.setVisible (hasIr);
+        resized();
         timerCallback();
         repaint();
     }
@@ -786,7 +839,8 @@ private:
 
     TextButton loadModelButton { "LOAD CAPTURE..." }, loadIrButton { "LOAD IR..." };
     StageButton clearModelButton { "", Icons::Ui::close }, clearIrButton { "", Icons::Ui::close };
-    TextButton normalizeToggle { "NORMALIZE" }, liteToggle { "LITE (LESS CPU)" }, irToggle { "IR ON" };
+    static constexpr int cardHeight = 150, buttonColumn = 300;
+    ToggleChip normalizeToggle { "NORMALIZE" }, liteToggle { "LITE (LESS CPU)" }, irToggle { "IR" };
     Slider inputKnob, outputKnob;
 };
 
