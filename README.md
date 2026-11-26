@@ -63,6 +63,16 @@ Only VST3 plugins are hosted. Audio Units are disabled (`JUCE_PLUGINHOST_AU=0`).
 
 For the stage: **IMPOSTAZIONI → Schermo intero** (full screen). On Windows you can put a shortcut to `ChainRig.exe` in the startup folder (Win+R → `shell:startup`), so it starts full screen on the last preset.
 
+## Preparing a Windows machine for the stage
+
+1. **Audio interface driver.** Install the manufacturer's ASIO driver and choose it in ChainRig (type **ASIO**). Avoid the generic Windows audio driver for live use.
+2. **Power.** *Settings → System → Power*: power mode "Best performance", and screen/sleep "Never" while plugged in. In the classic Control Panel power options, set *USB settings → USB selective suspend* to *Disabled*.
+3. **System sounds.** Set the Windows default output to the built-in speakers, not to your interface, and choose the "No sounds" scheme. Turn on *Do not disturb*. Otherwise notifications, browser tabs and other apps play through your rig.
+4. **Plugins.** Install your VST3 plugins in `C:\Program Files\Common Files\VST3`, then use **Scegli plugin...** to pick only the ones you need.
+5. **Presets from another computer.** Copy the `.chainrig` files to `Documents\ChainRig\Preset`. Reload any amp captures or IR files that use file paths inside the plugin, then save the preset again.
+6. **First launch.** Windows SmartScreen may warn about an unrecognised app: choose *More info → Run anyway*.
+7. **Before the gig.** Play for 20-30 minutes with your real presets and watch "picco" and "xrun" in the top bar. If xruns appear, raise the buffer one step. Consider airplane mode (unless you use Bluetooth MIDI) and close other applications.
+
 ## MIDI foot controllers (USB or Bluetooth)
 
 All MIDI inputs are enabled automatically, including those connected after launch.
