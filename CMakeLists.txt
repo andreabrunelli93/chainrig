@@ -26,6 +26,40 @@ else()
     FetchContent_MakeAvailable(JUCE)
 endif()
 
+# Neural Amp Modeler (MIT): il motore delle catture NAM per il posto "NAM" integrato.
+# Con -DNAM_PATH=... usi una copia locale di NeuralAmpModelerCore (con i sottomoduli).
+set(NAM_PATH "" CACHE PATH "Percorso di una copia locale di NeuralAmpModelerCore (facoltativo)")
+
+if(NOT NAM_PATH)
+    include(FetchContent)
+    FetchContent_Declare(nam_core
+        GIT_REPOSITORY https://github.com/sdatkinson/NeuralAmpModelerCore.git
+        GIT_TAG v0.6.0
+        GIT_SHALLOW TRUE
+        GIT_SUBMODULES "Dependencies/eigen" "Dependencies/AudioDSPTools"
+        SOURCE_SUBDIR _non_compilare_gli_strumenti)   # solo i sorgenti: il loro CMakeLists compila anche i tool
+    FetchContent_MakeAvailable(nam_core)
+    set(NAM_PATH ${nam_core_SOURCE_DIR})
+endif()
+
+file(GLOB NAM_SOURCES "${NAM_PATH}/NAM/*.cpp" "${NAM_PATH}/NAM/*/*.cpp")
+# OBJECT e non STATIC: le architetture si registrano con oggetti statici che il linker scarterebbe
+add_library(nam_core OBJECT ${NAM_SOURCES})
+target_include_directories(nam_core SYSTEM PUBLIC
+    "${NAM_PATH}"
+    "${NAM_PATH}/Dependencies/eigen"
+    "${NAM_PATH}/Dependencies/nlohmann"
+    "${NAM_PATH}/Dependencies/AudioDSPTools/dsp")
+target_compile_definitions(nam_core PUBLIC NAM_ENABLE_A2_FAST)
+if(WIN32)
+    target_compile_definitions(nam_core PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
+if(MSVC)
+    target_compile_options(nam_core PRIVATE /bigobj /W0)
+else()
+    target_compile_options(nam_core PRIVATE -w)
+endif()
+
 juce_add_gui_app(ChainRig
     PRODUCT_NAME "ChainRig"
     COMPANY_NAME "ChainRig"
@@ -43,6 +77,8 @@ target_sources(ChainRig PRIVATE
     Source/MainComponent.cpp
     Source/Look.cpp
     Source/Look.h
+    Source/NamProcessor.cpp
+    Source/NamProcessor.h
     Source/PluginChooser.cpp
     Source/PluginChooser.h
     Source/PluginScanner.h
@@ -69,6 +105,8 @@ juce_add_binary_data(ChainRigData SOURCES assets/buymeacoffee.png)
 target_link_libraries(ChainRig
     PRIVATE
         ChainRigData
+        nam_core
+        juce::juce_dsp
         juce::juce_audio_utils
         juce::juce_audio_processors
     PUBLIC

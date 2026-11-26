@@ -4,6 +4,9 @@ All notable changes to ChainRig. Versions follow [semantic versioning](https://s
 
 ## [Unreleased]
 
+### Added
+- Built-in NAM slot: plays Neural Amp Modeler captures (`.nam`, A1 and A2) and an optional cab IR without a separate plugin. Normalize, Lite (A2), input/output gain, IR on/off, crossfade when the capture changes, resampling for 48 kHz captures. Missing files are looked up by name in `Documents/ChainRig/Tones`. Choose it from the slot menu: **Built-in → NAM: capture + IR**.
+
 ## [0.2.4] - 2026-11-26
 
 ### Changed

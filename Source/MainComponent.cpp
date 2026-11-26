@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include "NamProcessor.h"
 #include "PluginChooser.h"
 #include "SetlistEditor.h"
 #include "BinaryData.h"
@@ -993,6 +994,14 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     updateStatus();
     startTimerHz (4);
 
+    // sviluppo: CHAINRIG_OPEN_EDITOR=3 apre la finestra del posto 3 all'avvio (per provarla senza clic)
+    if (const int editorSlot = SystemStats::getEnvironmentVariable ("CHAINRIG_OPEN_EDITOR", {}).getIntValue(); editorSlot > 0)
+        Timer::callAfterDelay (2000, [safe = SafePointer<MainComponent> (this), editorSlot]
+        {
+            if (safe != nullptr)
+                safe->openPluginWindow (safe->engine.getSlotProcessor (editorSlot - 1));
+        });
+
     statusDisplay.onClick = [this] { showUpdateDialog(); };
 
     // controllo aggiornamenti: qualche secondo dopo l'avvio, in background
@@ -1254,19 +1263,22 @@ void MainComponent::showSlotMenu (int slot)
     const auto types = engine.knownPlugins.getTypes();
     const bool empty = engine.isSlotEmpty (slot);
 
-    PopupMenu pluginMenu;
-    KnownPluginList::addToMenu (pluginMenu, types, KnownPluginList::sortByManufacturer);
+    enum { openEditor = 1, toggleBypass, renameSlot, moveLeft, moveRight, removePlugin, scanPlugins, builtInNam, kindBase = 200 };
 
-    enum { openEditor = 1, toggleBypass, renameSlot, moveLeft, moveRight, removePlugin, scanPlugins, kindBase = 200 };
+    // prima i posti integrati, poi i plugin della lista
+    PopupMenu pluginMenu;
+    pluginMenu.addSectionHeader ("Built-in");
+    pluginMenu.addItem (builtInNam, "NAM: capture + IR");
+    pluginMenu.addSectionHeader ("Plugins");
+    if (types.isEmpty())
+        pluginMenu.addItem (scanPlugins, "No plugins in the list: choose plugins...");
+    else
+        KnownPluginList::addToMenu (pluginMenu, types, KnownPluginList::sortByManufacturer);
 
     PopupMenu menu;
     menu.addSectionHeader ("Slot " + String (slot + 1) + (empty ? String() : " - " + engine.getSlotName (slot)));
 
-    if (types.isEmpty() && empty)
-    {
-        menu.addItem (scanPlugins, "No plugins in the list: choose plugins...");
-    }
-    else if (empty)
+    if (empty)
     {
         menu.addSubMenu ("Choose plugin", pluginMenu);
     }
@@ -1287,8 +1299,7 @@ void MainComponent::showSlotMenu (int slot)
         menu.addItem (renameSlot, "Rename...");
         menu.addSubMenu ("Type: " + Engine::getSlotKindName (engine.getSlotKind (slot)), kindMenu);
         menu.addSeparator();
-        if (! types.isEmpty())
-            menu.addSubMenu ("Replace with", pluginMenu);
+        menu.addSubMenu ("Replace with", pluginMenu);
         menu.addItem (moveLeft,  "Move left", slot > 0);
         menu.addItem (moveRight, "Move right",   slot < Engine::numSlots - 1);
         menu.addSeparator();
@@ -1310,7 +1321,17 @@ void MainComponent::showSlotMenu (int slot)
             return;
         }
 
-        if (result >= kindBase && result <= kindBase + (int) Engine::SlotKind::fx)
+        if (result == builtInNam)
+        {
+            String error;
+            if (engine.loadPluginIntoSlot (slot, NamProcessor::getDescription(), error))
+                openPluginWindow (engine.getSlotProcessor (slot));   // vuoto: si sceglie subito la cattura
+            else
+                showError ("Could not load the plugin", "NAM\n\n" + error);
+            return;
+        }
+
+                if (result >= kindBase && result <= kindBase + (int) Engine::SlotKind::fx)
         {
             engine.setSlotKind (slot, (Engine::SlotKind) (result - kindBase));
             return;

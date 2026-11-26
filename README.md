@@ -22,6 +22,7 @@ You also need your own VST3 plugins and, on Windows, your audio interface's ASIO
 ## Features
 
 - **10-slot serial chain.** Tap a slot to pick a plugin from your list. The same menu opens the plugin's editor, bypasses, replaces, moves or removes it. Empty slots are skipped.
+- **Built-in NAM slot.** Plays [Neural Amp Modeler](https://www.neuralampmodeler.com) captures (`.nam`, A1 and A2) without a separate plugin, followed by an optional cab IR (`.wav`, `.aif`, `.flac`). Pick **Built-in → NAM: capture + IR** from the slot menu. The window shows the capture's name, gear and author, and has **Normalize** (brings captures to a similar volume, from the loudness stored in the file), **Lite** for A2 captures (the smaller model inside the file, for slower computers), input and output gain, and an IR on/off switch. Switching capture crossfades, so it doesn't click. Captures recorded at 48 kHz are resampled when the interface runs at another rate. The slot shows the capture's name. If a preset refers to a capture or IR that isn't at its saved path (for example a preset copied from another computer), ChainRig looks for a file with the same name in `Documents/ChainRig/Tones` and its subfolders.
 - **Drag to reorder.** Drag a slot onto an empty slot to move it there, or onto an occupied slot to insert it and shift the others. Footswitch assignments follow the plugins.
 - **Slot name and type.** From the slot menu: **Rename...** (leave empty to go back to the plugin name) and **Type**: amp, cab/IR, drive, compressor, EQ, modulation, delay, reverb, other. The type sets the slot's icon and tag. "Automatic" guesses it from the plugin's category and name. Name and type are stored in the preset.
 - **4 large footswitches, switch or scene.** In **switch** mode a footswitch turns its assigned slots on and off and shows their names (for example "DRIVE + DELAY"). A slot assigned to a switch only plays while that switch is on.
@@ -125,11 +126,12 @@ Bluetooth: controllers sold with their own USB dongle work out of the box. For n
 
 - Loading a plugin that is not already in the chain still takes a moment (the old chain keeps playing meanwhile). Plugins that load large files in their state, such as amp captures, may briefly glitch while switching if their settings change. Bypass and footswitches are click-free.
 - A plugin crash while playing takes down the whole application.
-- File paths stored inside plugin states (amp captures, IRs) differ between machines and must be reloaded after moving a preset to another computer.
+- File paths stored inside third-party plugin states (amp captures, IRs) differ between machines and must be reloaded after moving a preset to another computer. The built-in NAM slot finds them again if you put the files in `Documents/ChainRig/Tones`.
 
 ## Code structure
 
 - `Source/Engine.*`: audio device, processing graph (input → tuner → slots → output), bypass, footswitches, MIDI, presets, tempo, audio health checks.
+- `Source/NamProcessor.*`: the built-in NAM slot (capture, resampling, IR, gains, its window) and the "Built-in" plugin format.
 - `Source/Recorder.h`: the audio callback wrapper. It runs the graph, then feeds the meter, the diagnostics and the WAV writer.
 - `Source/Tuner.h`: tuner node, lock-free FIFO to the UI, YIN pitch detection.
 - `Source/PluginScanner.h`: out-of-process plugin scanning.
@@ -148,6 +150,8 @@ See [CHANGELOG.md](CHANGELOG.md).
 ChainRig is free software, released under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
 
 It is built on [JUCE](https://juce.com), used under JUCE's open-source (AGPLv3) licence. If you distribute a modified version, you must make its source code available under the same licence. Plugins you load in ChainRig are separate products with their own licences.
+
+The built-in NAM slot uses [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore) (MIT) and its dependencies [Eigen](https://eigen.tuxfamily.org) (MPL-2.0), [AudioDSPTools](https://github.com/sdatkinson/AudioDSPTools) (MIT, with a resampler from iPlug2/WDL under the zlib-style licence) and [nlohmann/json](https://github.com/nlohmann/json) (MIT). They are downloaded at build time.
 
 ## Support
 
