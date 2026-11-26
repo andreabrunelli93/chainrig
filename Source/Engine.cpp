@@ -13,6 +13,66 @@ namespace
 
 //==============================================================================
 //==============================================================================
+namespace
+{
+    constexpr double tailHoldSeconds = 9.0, tailFadeSeconds = 3.0;
+    constexpr int maxTails = 4;   // cambi preset molto rapidi: le code più vecchie lasciano il posto
+}
+
+struct Engine::TailFader final : public AudioProcessor
+{
+    TailFader() : AudioProcessor (BusesProperties().withInput  ("In",  AudioChannelSet::stereo(), true)
+                                                     .withOutput ("Out", AudioChannelSet::stereo(), true)) {}
+
+    void prepareToPlay (double sr, int) override
+    {
+        holdSamples = (int64) (sr * tailHoldSeconds);
+        fadeSamples = jmax ((int64) 1, (int64) (sr * tailFadeSeconds));
+    }
+
+    void processBlock (AudioBuffer<float>& buffer, MidiBuffer&) override
+    {
+        const int n = buffer.getNumSamples();
+
+        // guadagno all'inizio e alla fine del blocco: piatto, poi rampa lineare fino a zero
+        const auto gainAt = [this] (int64 pos)
+        {
+            if (pos <= holdSamples) return 1.0f;
+            return jmax (0.0f, 1.0f - (float) (pos - holdSamples) / (float) fadeSamples);
+        };
+
+        const float g0 = gainAt (position), g1 = gainAt (position + n);
+        position += n;
+
+        if (exactlyEqual (g0, 1.0f) && exactlyEqual (g1, 1.0f))
+            return;
+
+        if (exactlyEqual (g0, 0.0f) && exactlyEqual (g1, 0.0f))
+            buffer.clear();
+        else
+            buffer.applyGainRamp (0, n, g0, g1);
+    }
+
+    const String getName() const override                        { return "Tail fader"; }
+    void releaseResources() override                             {}
+    double getTailLengthSeconds() const override                 { return 0.0; }
+    bool acceptsMidi() const override                            { return false; }
+    bool producesMidi() const override                           { return false; }
+    AudioProcessorEditor* createEditor() override                { return nullptr; }
+    bool hasEditor() const override                              { return false; }
+    int getNumPrograms() override                                { return 1; }
+    int getCurrentProgram() override                             { return 0; }
+    void setCurrentProgram (int) override                        {}
+    const String getProgramName (int) override                   { return {}; }
+    void changeProgramName (int, const String&) override         {}
+    void getStateInformation (MemoryBlock&) override             {}
+    void setStateInformation (const void*, int) override         {}
+
+private:
+    int64 position = 0, holdSamples = 0, fadeSamples = 1;   // solo thread audio (dopo prepareToPlay)
+};
+
+//==============================================================================
 struct Engine::MonoBypassFix final : public AudioProcessor
 {
     MonoBypassFix() : AudioProcessor (BusesProperties().withInput  ("In",  AudioChannelSet::stereo(), true)
@@ -524,6 +584,13 @@ void Engine::rewire()
 
     connectNodes (previous, outputNode, 2);   // solo le uscite 1-2 della scheda
 
+    // code del preset precedente: plugin (senza ingresso) -> sfumatura -> uscita, sommate alla catena
+    for (const auto& tail : tails)
+    {
+        connectNodes (tail.plugin, tail.fader, 2);
+        connectNodes (tail.fader, outputNode, 2);
+    }
+
     updateBypassStates();
     graph.rebuild();
 }
@@ -919,6 +986,7 @@ void Engine::timerCallback()
         markDirty();
 
     writeRecoveryIfNeeded();
+    removeExpiredTails();
 
     if (++timerTicks % 4 != 0)
         return;
@@ -1018,6 +1086,77 @@ void Engine::setInputChannel (int channelIndex)
     props().setValue ("inputChannel", inputChannel);
     rewire();
     sendChangeMessage();
+}
+
+bool Engine::isSpilloverEnabled() const   { return appProperties.getUserSettings()->getBoolValue ("spillover", true); }
+
+void Engine::setSpilloverEnabled (bool enabled)
+{
+    props().setValue ("spillover", enabled);
+    props().saveIfNeeded();
+    sendChangeMessage();
+}
+
+//==============================================================================
+void Engine::keepAsTail (int slot)
+{
+    auto& s = slots[(size_t) slot];
+
+    if (! s.node.has_value())
+        return;
+
+    while (tails.size() >= maxTails)
+        removeTail (0, UpdateKind::none);
+
+    if (auto* node = graph.getNodeForId (*s.node))
+    {
+        node->getProcessor()->removeListener (this);   // non è più parte del preset
+
+        if (onProcessorAboutToBeDeleted != nullptr)    // chiude la sua finestra, se aperta
+            onProcessorAboutToBeDeleted (node->getProcessor());
+    }
+
+    Tail tail;
+    tail.plugin = *s.node;
+    tail.fader = graph.addNode (std::make_unique<TailFader>(), std::nullopt, UpdateKind::none)->nodeID;
+    tail.removeAtMs = Time::getMillisecondCounter() + (uint32) ((tailHoldSeconds + tailFadeSeconds) * 1000.0) + 500;
+    tails.add (tail);
+
+    s.node.reset();
+    s.userBypassed = false;
+    s.customName.clear();
+    s.kind = SlotKind::automatic;
+}
+
+void Engine::removeTail (int index, UpdateKind kind)
+{
+    const auto tail = tails[index];
+    tails.remove (index);
+
+    if (auto* node = graph.getNodeForId (tail.plugin); node != nullptr && onProcessorAboutToBeDeleted != nullptr)
+        onProcessorAboutToBeDeleted (node->getProcessor());
+
+    graph.removeNode (tail.fader, UpdateKind::none);
+    graph.removeNode (tail.plugin, kind);
+}
+
+void Engine::removeExpiredTails()
+{
+    const auto now = Time::getMillisecondCounter();
+    bool removed = false;
+
+    for (int i = tails.size(); --i >= 0;)
+        if (now >= tails.getReference (i).removeAtMs)
+        {
+            removeTail (i, UpdateKind::none);
+            removed = true;
+        }
+
+    if (removed)
+    {
+        graph.rebuild();
+        PluginScanner::log ("TAILS faded out, " + String (tails.size()) + " still playing");
+    }
 }
 
 void Engine::setOutputGainDb (float db)
@@ -1511,6 +1650,28 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
         return a.pluginFormatName == b.pluginFormatName && a.uniqueId == b.uniqueId && a.name == b.name;
     };
 
+    // Stato attuale dei plugin caricati, letto una volta sola e solo se serve:
+    // con lo stesso stato il plugin si riusa così com'è (niente ricaricamento, la coda continua)
+    std::array<std::optional<MemoryBlock>, numSlots> currentStates;
+    const auto currentState = [&] (int j) -> const MemoryBlock&
+    {
+        auto& cached = currentStates[(size_t) j];
+        if (! cached.has_value())
+        {
+            cached.emplace();
+            if (auto* proc = getSlotProcessor (j))
+                proc->getStateInformation (*cached);
+        }
+        return *cached;
+    };
+
+    // delay e riverberi che suonavano: diventano code invece di essere riusati con un'altra impostazione
+    const bool spillover = isSpilloverEnabled();
+    std::array<bool, numSlots> tailCandidate {};
+    for (int j = 0; j < numSlots; ++j)
+        tailCandidate[(size_t) j] = spillover && ! isSlotEmpty (j) && isSlotActive (j)
+                                    && (getSlotKind (j) == SlotKind::delay || getSlotKind (j) == SlotKind::reverb);
+
     if (const auto* slotList = root["slots"].getArray())
     {
         for (int i = 0; i < jmin (numSlots, slotList->size()); ++i)
@@ -1538,7 +1699,8 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
             const auto canReuse = [&] (int j)
             {
                 return ! reused[(size_t) j] && slots[(size_t) j].node.has_value()
-                        && samePlugin (slots[(size_t) j].description, p.description);
+                        && samePlugin (slots[(size_t) j].description, p.description)
+                        && (! tailCandidate[(size_t) j] || currentState (j) == p.state);
             };
 
             int from = canReuse (i) ? i : -1;
@@ -1582,9 +1744,15 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
         if (const auto& p = plan[(size_t) i]; p.used && p.reuseFrom >= 0)
             newSlots[(size_t) i] = slots[(size_t) p.reuseFrom];
 
+    int numTails = 0;
     for (int j = 0; j < numSlots; ++j)
-        if (! reused[(size_t) j])
-            removeSlotNode (j, UpdateKind::none);
+    {
+        if (reused[(size_t) j])
+            continue;
+
+        if (tailCandidate[(size_t) j]) { keepAsTail (j); ++numTails; }
+        else                           removeSlotNode (j, UpdateKind::none);
+    }
 
     for (int i = 0; i < numSlots; ++i)
     {
@@ -1596,8 +1764,9 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
 
         if (p.reuseFrom >= 0)
         {
-            // stesso plugin: basta applicare le impostazioni del preset
-            if (auto* node = graph.getNodeForId (*slot.node); node != nullptr && p.state.getSize() > 0)
+            // stesso plugin: basta applicare le impostazioni del preset (se sono diverse)
+            if (auto* node = graph.getNodeForId (*slot.node);
+                node != nullptr && p.state.getSize() > 0 && currentState (p.reuseFrom) != p.state)
                 node->getProcessor()->setStateInformation (p.state.getData(), (int) p.state.getSize());
         }
         else if (auto node = graph.addNode (std::move (p.instance), std::nullopt, UpdateKind::none))
@@ -1647,7 +1816,7 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
     rewire();
 
     PluginScanner::log ("PRESET " + nameForLog + ": " + String (numReused) + " plugins reused, "
-                        + String (numCreated) + " new, " + String (Time::getMillisecondCounterHiRes() - startMs, 0) + " ms");
+                        + String (numCreated) + " new, " + String (numTails) + " tails, " + String (Time::getMillisecondCounterHiRes() - startMs, 0) + " ms");
     return errors.isEmpty();
 }
 

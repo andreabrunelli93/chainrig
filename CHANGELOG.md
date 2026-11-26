@@ -4,7 +4,11 @@ All notable changes to ChainRig. Versions follow [semantic versioning](https://s
 
 ## [Unreleased]
 
+### Changed
+- Preset switching skips reloading the settings of plugins whose settings are already the same (faster, no glitch from amp captures reloading).
+
 ### Added
+- Delay and reverb tails ring out on preset change (spillover): the old delays and reverbs keep playing without input for about 12 s and fade out. Can be turned off in Settings.
 - Setlists: an ordered list of songs, each with its preset, edited from the preset menu. While a setlist is active, `<` / `>`, MIDI next/previous and Program Change follow the songs, and the preset area shows the song name and number.
 
 ## [0.2.3] - 2026-11-26

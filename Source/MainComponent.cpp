@@ -1762,7 +1762,7 @@ void MainComponent::showSetlistEditor (const File& existing)
 void MainComponent::showSettingsMenu()
 {
     enum { audioSettings = 1, pluginList, midiMomentary, midiAbsolute, fullScreen, quit,
-           checkUpdatesNow, autoUpdateCheck, donate, inputBase = 100 };
+           checkUpdatesNow, autoUpdateCheck, donate, spillover, inputBase = 100 };
 
     PopupMenu inputMenu;
     const int numInputs = engine.getNumDeviceInputs();
@@ -1787,6 +1787,7 @@ void MainComponent::showSettingsMenu()
     menu.addSubMenu ("Guitar input", inputMenu);
     menu.addSubMenu ("MIDI foot controller", midiMenu);
     menu.addItem (fullScreen, "Full screen", true, isFullScreen);
+    menu.addItem (spillover, "Let delay and reverb tails ring out on preset change", true, engine.isSpilloverEnabled());
     menu.addSeparator();
     menu.addItem (checkUpdatesNow, "Check for updates now");
     menu.addItem (autoUpdateCheck, "Check for updates at startup", true, engine.props().getBoolValue ("checkUpdates", true));
@@ -1806,6 +1807,7 @@ void MainComponent::showSettingsMenu()
             case midiMomentary: engine.setMidiMode (Engine::MidiMode::momentary); break;
             case midiAbsolute:  engine.setMidiMode (Engine::MidiMode::absolute); break;
             case fullScreen:    setFullScreen (! isFullScreen); break;
+            case spillover:     engine.setSpilloverEnabled (! engine.isSpilloverEnabled()); break;
             case checkUpdatesNow: checkForUpdates (true); break;
             case autoUpdateCheck:
                 engine.props().setValue ("checkUpdates", ! engine.props().getBoolValue ("checkUpdates", true));

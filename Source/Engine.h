@@ -180,6 +180,11 @@ public:
     void setInputMuted (bool);
     void setInputChannel (int channelIndex);
 
+    /** Code di delay e riverberi al cambio preset: quelli che suonavano continuano
+        (con le impostazioni vecchie, senza ingresso) e sfumano, mentre il preset nuovo è già attivo. */
+    bool isSpilloverEnabled() const;
+    void setSpilloverEnabled (bool);
+
     // Volume d'uscita generale (salvato nelle impostazioni). minOutputGainDb = muto.
     static constexpr float minOutputGainDb = -60.0f, maxOutputGainDb = 12.0f;
     float getOutputGainDb() const                 { return outputGainDb; }
@@ -219,6 +224,19 @@ private:
         (il bypass di JUCE copia solo i canali che hanno un ingresso). Dopo questi plugin c'è
         un piccolo nodo che, solo quando il posto è in bypass, copia il sinistro nel destro. */
     struct MonoBypassFix;
+
+    /** Coda di un delay/riverbero del preset precedente: il plugin resta nel grafo senza
+        ingresso, passa per un TailFader e va dritto all'uscita finché non è sfumato. */
+    struct TailFader;
+    struct Tail
+    {
+        NodeID plugin, fader;
+        juce::uint32 removeAtMs = 0;
+    };
+    juce::Array<Tail> tails;
+    void keepAsTail (int slot);
+    void removeTail (int index, UpdateKind);
+    void removeExpiredTails();
     std::array<MonoBypassFix*, numSlots> monoFix {};
     juce::Array<NodeID> monoFixNodes;
     void enableAllMidiInputs();
