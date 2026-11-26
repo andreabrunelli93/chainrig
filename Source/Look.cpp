@@ -346,7 +346,7 @@ void StageButton::paintButton (Graphics& g, bool isMouseOver, bool isDown)
     const auto labelFont = Fonts::display (15.0f);
     const auto valueFont = Fonts::mono (15.0f);
     const float iconSize = (style == Style::record) ? 12.0f : (icon.has_value() ? 20.0f : 0.0f);
-    const float gap = 10.0f;
+    const float gap = label.isEmpty() ? 0.0f : 10.0f;   // solo icona: centrata
 
     const float labelW = GlyphArrangement::getStringWidth (labelFont, label);
     const float valueW = valueText.isEmpty() ? 0.0f : GlyphArrangement::getStringWidth (valueFont, valueText);

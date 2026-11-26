@@ -5,7 +5,10 @@ All notable changes to ChainRig. Versions follow [semantic versioning](https://s
 ## [Unreleased]
 
 ### Added
-- Settings menu: "Support ChainRig: buy me a coffee..." opens the donation page in the browser.
+- Buy Me a Coffee button under the output meter, also in the Settings menu ("Support ChainRig: buy me a coffee..."). It opens the donation page in the browser.
+
+### Fixed
+- Icon-only buttons (Settings) are now centred.
 
 ## [0.2.2] - 2026-11-26
 

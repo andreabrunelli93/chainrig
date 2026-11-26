@@ -181,6 +181,7 @@ private:
     void refresh();
     void showPresetMenu();
     void showSettingsMenu();
+    static void openDonationPage();
     void showBigButtonEditMenu (int index);
     void showAudioSettings();
     void showPluginChooser();
@@ -229,6 +230,12 @@ private:
     juce::OwnedArray<BigButton> bigButtons;
     TunerOverlay tunerOverlay { engine };
     OutputMeter outputMeter { engine };
+    struct CoffeeButton final : juce::Button   // sotto il misuratore: logo Buy Me a Coffee, apre la pagina delle donazioni
+    {
+        CoffeeButton();
+        void paintButton (juce::Graphics&, bool isMouseOver, bool isDown) override;
+        juce::Image logo;
+    } coffeeButton;
     InputStrip inputStrip { engine };
 
     std::map<juce::AudioProcessor*, std::unique_ptr<PluginWindow>> pluginWindows;

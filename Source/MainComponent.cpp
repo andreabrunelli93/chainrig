@@ -1,5 +1,6 @@
 #include "MainComponent.h"
 #include "PluginChooser.h"
+#include "BinaryData.h"
 
 using namespace juce;
 
@@ -937,6 +938,10 @@ MainComponent::MainComponent (Engine& e) : engine (e)
         addAndMakeVisible (bigButtons.add (new BigButton (*this, i)));
 
     addAndMakeVisible (outputMeter);
+    coffeeButton.setTitle ("Support ChainRig: buy me a coffee");
+    coffeeButton.setTooltip ("Support ChainRig: buy me a coffee");
+    coffeeButton.onClick = [] { openDonationPage(); };
+    addAndMakeVisible (coffeeButton);
     addAndMakeVisible (inputStrip);
     addChildComponent (tunerOverlay);
 
@@ -1044,7 +1049,12 @@ void MainComponent::resized()
     area.removeFromBottom (20);
 
     // misuratore d'uscita a destra, ingresso (gain e MUTE) a sinistra
-    outputMeter.setBounds (area.removeFromRight (84));
+    {
+        auto column = area.removeFromRight (84);
+        coffeeButton.setBounds (column.removeFromBottom (56));
+        column.removeFromBottom (14);
+        outputMeter.setBounds (column);
+    }
     area.removeFromRight (20);
     inputStrip.setBounds (area.removeFromLeft (84));
     area.removeFromLeft (20);
@@ -1600,6 +1610,28 @@ void MainComponent::confirmPresetSwitch (std::function<void()> switchPreset)
     });
 }
 
+MainComponent::CoffeeButton::CoffeeButton() : Button ("Buy me a coffee")
+{
+    logo = ImageCache::getFromMemory (BinaryData::buymeacoffee_png, BinaryData::buymeacoffee_pngSize);
+}
+
+void MainComponent::CoffeeButton::paintButton (Graphics& g, bool isMouseOver, bool isDown)
+{
+    auto bounds = getLocalBounds().toFloat().reduced (0.5f);
+    g.setColour (Palette::panel.brighter (isDown ? 0.12f : (isMouseOver ? 0.04f : 0.0f)));
+    g.fillRoundedRectangle (bounds, 14.0f);
+    g.setColour (Palette::border);
+    g.drawRoundedRectangle (bounds, 14.0f, 1.0f);
+
+    const float size = jmin (bounds.getHeight() - 16.0f, bounds.getWidth() - 16.0f);
+    g.drawImage (logo, Rectangle<float> (size, size).withCentre (bounds.getCentre()), RectanglePlacement::centred);
+}
+
+void MainComponent::openDonationPage()
+{
+    URL ("https://buymeacoffee.com/andreabrunelli").launchInDefaultBrowser();
+}
+
 void MainComponent::showSettingsMenu()
 {
     enum { audioSettings = 1, pluginList, midiMomentary, midiAbsolute, fullScreen, quit,
@@ -1652,7 +1684,7 @@ void MainComponent::showSettingsMenu()
                 engine.props().setValue ("checkUpdates", ! engine.props().getBoolValue ("checkUpdates", true));
                 engine.props().saveIfNeeded();
                 break;
-            case donate:        URL ("https://buymeacoffee.com/andreabrunelli").launchInDefaultBrowser(); break;
+            case donate:        openDonationPage(); break;
             case quit:          JUCEApplication::getInstance()->systemRequestedQuit(); break;
             default:
                 if (result >= inputBase)

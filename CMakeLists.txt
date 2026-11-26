@@ -62,8 +62,11 @@ if(WIN32 AND CHAINRIG_BLUETOOTH_MIDI)
     target_compile_definitions(ChainRig PRIVATE JUCE_USE_WINRT_MIDI=1)
 endif()
 
+juce_add_binary_data(ChainRigData SOURCES assets/buymeacoffee.png)
+
 target_link_libraries(ChainRig
     PRIVATE
+        ChainRigData
         juce::juce_audio_utils
         juce::juce_audio_processors
     PUBLIC
