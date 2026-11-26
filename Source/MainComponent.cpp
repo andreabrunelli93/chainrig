@@ -656,6 +656,34 @@ namespace
     }
 }
 
+OutputMeter::OutputMeter (Engine& e) : engine (e)
+{
+    volumeKnob.setRange (Engine::minOutputGainDb, Engine::maxOutputGainDb, 0.5);
+    volumeKnob.setSkewFactorFromMidPoint (-12.0);   // più risoluzione vicino a 0 dB
+    volumeKnob.setDoubleClickReturnValue (true, 0.0);
+    volumeKnob.setMouseDragSensitivity (300);
+    volumeKnob.setTitle ("Output volume");
+    volumeKnob.setValue (engine.getOutputGainDb(), dontSendNotification);
+    volumeKnob.onValueChange = [this]
+    {
+        engine.setOutputGainDb ((float) volumeKnob.getValue());
+        repaint (volumeTextArea.getSmallestIntegerContainer());
+    };
+    addAndMakeVisible (volumeKnob);
+
+    startTimerHz (30);
+}
+
+void OutputMeter::resized()
+{
+    auto area = getLocalBounds().toFloat().reduced (10.0f, 12.0f);
+
+    volumeTextArea = area.removeFromBottom (18.0f);
+    volumeKnob.setBounds (area.removeFromBottom (64.0f).toNearestInt());
+    area.removeFromBottom (10.0f);
+    meterArea = area;
+}
+
 void OutputMeter::timerCallback()
 {
     auto& recorder = engine.getRecorder();
@@ -699,7 +727,15 @@ void OutputMeter::paint (Graphics& g)
     g.setColour (Palette::border);
     g.drawRoundedRectangle (bounds, 16.0f, 1.0f);
 
-    auto area = bounds.reduced (10.0f, 12.0f);
+    // volume generale sotto la manopola
+    const float volumeDb = engine.getOutputGainDb();
+    g.setColour (exactlyEqual (volumeDb, 0.0f) ? Palette::textDim : Palette::accent);
+    g.setFont (Fonts::mono (12.0f));
+    g.drawText (volumeDb <= Engine::minOutputGainDb ? String ("muted")
+                                                    : (volumeDb > 0.0f ? "+" : "") + String (volumeDb, 1) + " dB",
+                volumeTextArea, Justification::centred);
+
+    auto area = meterArea;
 
     // spia CLIP in alto: resta accesa finché non tocchi la barra
     auto clipBox = area.removeFromTop (36.0f);
@@ -918,7 +954,7 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
     setLookAndFeel (&lookAndFeel);
 
-    for (auto* c : std::initializer_list<Component*> { &presetSelector, &tunerButton, &recButton, &statusDisplay,
+    for (auto* c : std::initializer_list<Component*> { &presetSelector, &tunerButton, &recButton, &tapButton, &statusDisplay,
                                                        &editButton, &settingsButton })
         addAndMakeVisible (c);
 
@@ -930,6 +966,9 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     settingsButton.onClick = [this] { showSettingsMenu(); };
     settingsButton.setTitle ("Settings");
     recButton.onClick      = [this] { toggleRecording(); };
+    tapButton.setTriggeredOnMouseDown (true);   // il tempo conta dal tocco, non dal rilascio
+    tapButton.onClick      = [this] { engine.tapTempo(); };
+    tapButton.setTitle ("Tap tempo");
 
     for (int i = 0; i < Engine::numSlots; ++i)
         addAndMakeVisible (slotViews.add (new SlotView (*this, i)));
@@ -1023,11 +1062,13 @@ void MainComponent::resized()
 
     // barra superiore
     auto top = area.removeFromTop (68);
-    presetSelector.setBounds (top.removeFromLeft (jmin (460, top.getWidth() / 3)));
+    presetSelector.setBounds (top.removeFromLeft (jmin (360, top.getWidth() / 4)));
     top.removeFromLeft (12);
-    tunerButton.setBounds (top.removeFromLeft (176));
+    tunerButton.setBounds (top.removeFromLeft (150));
     top.removeFromLeft (12);
-    recButton.setBounds (top.removeFromLeft (150));
+    recButton.setBounds (top.removeFromLeft (130));
+    top.removeFromLeft (12);
+    tapButton.setBounds (top.removeFromLeft (116));
     settingsButton.setBounds (top.removeFromRight (68));
     top.removeFromRight (12);
     editButton.setBounds (top.removeFromRight (132));
@@ -1161,6 +1202,9 @@ void MainComponent::refresh()
 
     tunerButton.setToggleState (engine.isTunerActive(), dontSendNotification);
     editButton.setToggleState (editMode, dontSendNotification);
+
+    const double bpm = engine.getBpm();
+    tapButton.setValueText (approximatelyEqual (bpm, std::round (bpm)) ? String (roundToInt (bpm)) : String (bpm, 1));
 
     tunerOverlay.setVisible (engine.isTunerActive());
     if (engine.isTunerActive())
@@ -1647,7 +1691,7 @@ void MainComponent::showSettingsMenu()
     midiMenu.addItem (midiAbsolute,  "Absolute: the value decides (127 = on, 0 = off)", true, engine.getMidiMode() == Engine::MidiMode::absolute);
     midiMenu.addSeparator();
     midiMenu.addItem (-1, "Footswitches: CC " + String (engine.getButtonCC (0)) + "-" + String (engine.getButtonCC (Engine::numButtons - 1))
-                            + "   Tuner: CC " + String (engine.getTunerCC()), false);
+                            + "   Tuner: CC " + String (engine.getTunerCC()) + "   Tap tempo: CC " + String (engine.getTapTempoCC()), false);
     midiMenu.addItem (-2, "Presets: CC " + String (engine.getNextPresetCC()) + " next, CC " + String (engine.getPrevPresetCC())
                             + " previous, Program Change = preset number", false);
 

@@ -107,6 +107,7 @@ public:
 
     int getButtonCC (int index) const;
     int getTunerCC() const;
+    int getTapTempoCC() const;
     int getNextPresetCC() const;
     int getPrevPresetCC() const;
     MidiMode getMidiMode() const;
@@ -137,6 +138,10 @@ public:
     /** Tempo comunicato ai plugin (delay e riverberi sincronizzati). Salvato nel preset. */
     double getBpm() const                         { return playHead.bpm.load(); }
     void setBpm (double bpm);
+
+    /** Tap tempo (touch o pedale MIDI): la media degli ultimi intervalli diventa il BPM.
+        Come i pedali, non conta come modifica non salvata. */
+    void tapTempo();
     juce::String getCurrentPresetName() const;
 
     //==============================================================================
@@ -149,6 +154,11 @@ public:
     bool isInputMuted() const                     { return tuner->inputMuted.load(); }
     void setInputMuted (bool);
     void setInputChannel (int channelIndex);
+
+    // Volume d'uscita generale (salvato nelle impostazioni). minOutputGainDb = muto.
+    static constexpr float minOutputGainDb = -60.0f, maxOutputGainDb = 12.0f;
+    float getOutputGainDb() const                 { return outputGainDb; }
+    void setOutputGainDb (float db);
     int getNumDeviceInputs() const;
     juce::String getStatusText() const;
 
@@ -179,6 +189,13 @@ private:
     void rewire();
     void connectNodes (NodeID from, NodeID to, int maxDestChannels);
     void updateBypassStates();
+
+    /** Un plugin con ingresso mono e uscita stereo, in bypass, lascia muto il canale destro
+        (il bypass di JUCE copia solo i canali che hanno un ingresso). Dopo questi plugin c'è
+        un piccolo nodo che, solo quando il posto è in bypass, copia il sinistro nel destro. */
+    struct MonoBypassFix;
+    std::array<MonoBypassFix*, numSlots> monoFix {};
+    juce::Array<NodeID> monoFixNodes;
     void enableAllMidiInputs();
     static void configureBusLayout (juce::AudioPluginInstance&);
     std::unique_ptr<juce::AudioPluginInstance> createInstance (const juce::PluginDescription&, juce::String& error,
@@ -216,6 +233,10 @@ private:
     juce::File currentPresetFile;
 
     juce::StringArray knownMidiInputs;
+    juce::String lastAudioSetupKey;          // per riconoscere i change message dovuti solo al MIDI
+    juce::String getAudioSetupKey() const;
+    float outputGainDb = 0.0f;
+    juce::Array<juce::uint32> tapTimes;
 
     // Preset come dati (usati sia per i file .chainrig sia per il recupero)
     juce::var createPresetState() const;

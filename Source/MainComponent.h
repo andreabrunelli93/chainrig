@@ -76,19 +76,22 @@ private:
 };
 
 //==============================================================================
-/** Barra laterale con il livello d'uscita (L/R), la tenuta del picco e la spia CLIP.
-    La spia resta accesa finché non la tocchi. */
+/** Barra laterale con il livello d'uscita (L/R), la tenuta del picco, la spia CLIP
+    e la manopola del volume generale. La spia resta accesa finché non la tocchi. */
 class OutputMeter final : public juce::Component, private juce::Timer
 {
 public:
-    explicit OutputMeter (Engine& e) : engine (e) { startTimerHz (30); }
+    explicit OutputMeter (Engine&);
     void paint (juce::Graphics&) override;
+    void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
 
 private:
     void timerCallback() override;
 
     Engine& engine;
+    juce::Slider volumeKnob { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox };
+    juce::Rectangle<float> meterArea, volumeTextArea;
     float level[2] {}, hold[2] {};
     juce::uint32 holdTime[2] {};
     float maxPeak = 0.0f;      // massimo dall'ultimo tocco, in lineare
@@ -213,6 +216,7 @@ private:
     PresetSelector presetSelector;
     StageButton tunerButton    { "TUNER", Icons::Ui::tuningFork },
                 recButton      { "REC", std::nullopt, StageButton::Style::record },
+                tapButton      { "TAP" },
                 editButton     { "EDIT" },
                 settingsButton { "", Icons::Ui::settings };
     StatusDisplay statusDisplay;

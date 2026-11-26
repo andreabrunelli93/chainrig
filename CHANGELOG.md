@@ -5,9 +5,15 @@ All notable changes to ChainRig. Versions follow [semantic versioning](https://s
 ## [Unreleased]
 
 ### Added
+- Master output volume knob under the output meter (saved in the settings).
+- Tap tempo: **TAP** button in the top bar (shows the BPM) and MIDI CC 87.
+- The log (`scan.log`) lists the input/output channels of every plugin loaded.
 - Buy Me a Coffee button under the output meter, also in the Settings menu ("Support ChainRig: buy me a coffee..."). It opens the donation page in the browser.
 
 ### Fixed
+- A bypassed plugin with a mono input and stereo output no longer silences the right channel.
+- Connecting or disconnecting a MIDI device no longer rebuilds the chain or stops the recorder.
+- The status area has more room: peak load and xruns are no longer cut off. The tempo moved to the TAP button.
 - Icon-only buttons (Settings) are now centred.
 
 ## [0.2.2] - 2026-11-26

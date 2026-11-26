@@ -102,6 +102,10 @@ public:
     juce::File getLastSavedFile() const      { return lastSavedFile; }
     int getDroppedBlocks() const             { return droppedBlocks.load(); }
 
+    /** Volume d'uscita generale (lineare), applicato dopo la catena con una rampa per blocco.
+        Il misuratore e la registrazione lo seguono: mostrano quello che esce davvero. */
+    void setOutputGain (float linear)        { targetOutputGain = juce::jmax (0.0f, linear); }
+
     /** Interfaccia: picco (lineare) del canale dall'ultima lettura, poi azzera. */
     float takePeak (int channel)             { return peaks[juce::jlimit (0, 1, channel)].exchange (0.0f); }
 
@@ -165,6 +169,28 @@ public:
         if (numOutputs <= 0 || outputs[0] == nullptr)
             return;
 
+        // Volume d'uscita: la catena esce solo sui canali 1-2
+        if (const float target = targetOutputGain.load(); ! juce::exactlyEqual (target, currentOutputGain) || ! juce::exactlyEqual (target, 1.0f))
+        {
+            for (int ch = 0; ch < juce::jmin (2, numOutputs); ++ch)
+            {
+                if (outputs[ch] == nullptr)
+                    continue;
+
+                if (juce::approximatelyEqual (target, currentOutputGain))
+                    juce::FloatVectorOperations::multiply (outputs[ch], target, numSamples);
+                else
+                {
+                    const float step = (target - currentOutputGain) / (float) numSamples;
+                    float g = currentOutputGain;
+                    for (int i = 0; i < numSamples; ++i, g += step)
+                        outputs[ch][i] *= g;
+                }
+            }
+
+            currentOutputGain = target;
+        }
+
         const float* channels[2] = { outputs[0], (numOutputs > 1 && outputs[1] != nullptr) ? outputs[1] : outputs[0] };
 
         // Misuratore d'uscita: picco del blocco, tenuto finché l'interfaccia non lo legge
@@ -219,6 +245,8 @@ private:
     std::atomic<int> droppedBlocks { 0 };
 
     std::atomic<float> peaks[2] { 0.0f, 0.0f };
+    std::atomic<float> targetOutputGain { 1.0f };
+    float currentOutputGain = 1.0f;           // solo thread audio
 
     // diagnostica dei buchi audio
     const double secondsPerTick = 1.0 / (double) juce::Time::getHighResolutionTicksPerSecond();

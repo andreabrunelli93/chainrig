@@ -31,11 +31,11 @@ You also need your own VST3 plugins and, on Windows, your audio interface's ASIO
 - **Presets.** One readable JSON file (`.chainrig`) per preset, in `Documents/ChainRig/Preset`. A preset stores every plugin with its full state, the bypass states, slot names and types, footswitch modes, assignments and scenes, and the tempo. Switch presets with `<` / `>` or over MIDI.
 - **Unsaved changes.** An amber dot and "UNSAVED" next to the preset name show changes since the last save: plugins loaded, moved or removed, bypass, names, types, footswitch assignments, tempo, and parameter changes inside a plugin. Turning footswitches on and off does not count. Switching preset from the touch screen asks whether to save first. Switching from a MIDI controller never asks, so it cannot block you on stage.
 - **Crash recovery.** Every 10 s, if something changed, the full chain is written to a recovery file next to the settings. A clean exit deletes it. If ChainRig closed unexpectedly, the next launch restores the chain as it was and tells you. If restoring itself crashes (for example a plugin that crashes on load), the following launch skips it and opens the last preset instead.
-- **Tempo (BPM).** Each preset sends a tempo to the plugins, so tempo-synced delays and reverbs behave. Set it from the preset menu: **Tempo: 120 BPM...**.
+- **Tempo (BPM).** Each preset sends a tempo to the plugins, so tempo-synced delays and reverbs behave. Set it from the preset menu (**Tempo: 120 BPM...**), or tap it: the **TAP** button in the top bar (or a MIDI pedal) averages your last taps. Tapping counts as live use, not as an unsaved change.
 - **Plugin chooser.** Tick only the plugins you use live. The others are never loaded, which matters if you have hundreds of plugins installed.
 - **Crash-safe plugin scan.** Each plugin is scanned in a separate process. If one hangs for more than 30 s or crashes, it is excluded and ChainRig carries on.
 - **Input strip** (left): input level after gain, with a latching **CLIP** light, an input **gain** knob (-24 to +24 dB, double-tap for 0 dB, saved in the settings) and an input **MUTE**. Muting the input lets delay and reverb tails ring out.
-- **Output meter** (right) with peak hold and a latching **CLIP** light. Tap either meter to reset it.
+- **Output meter** (right) with peak hold, a latching **CLIP** light and a master **volume** knob (-60 dB = muted, up to +12 dB, double-tap for 0 dB, saved in the settings). The meter and the recorder follow the volume. Tap either meter to reset it.
 - **Recorder.** **REC** writes the output (channels 1-2, i.e. the whole chain) to a 24-bit stereo WAV file in your Downloads folder.
 - **Low latency.** ASIO on Windows, Core Audio on macOS. The top bar shows the estimated latency, the CPU load, the peak load of a single audio block and the xrun count.
 
@@ -99,6 +99,7 @@ All MIDI inputs are enabled automatically, including those connected after launc
 |---|---|
 | Footswitches 1-4 | CC 80, 81, 82, 83 |
 | Tuner | CC 84 |
+| Tap tempo | CC 87 |
 | Next / previous preset | CC 85 / CC 86 |
 | Preset number N (alphabetical order) | Program Change N |
 
@@ -122,7 +123,6 @@ Bluetooth: controllers sold with their own USB dongle work out of the box. For n
 
 - Loading a plugin that is not already in the chain still takes a moment (the old chain keeps playing meanwhile). Plugins that load large files in their state, such as amp captures, may briefly glitch while switching. Bypass and footswitches are click-free.
 - A plugin crash while playing takes down the whole application.
-- If a mono-in/stereo-out plugin is bypassed, the right channel of that slot is silent.
 - File paths stored inside plugin states (amp captures, IRs) differ between machines and must be reloaded after moving a preset to another computer.
 
 ## Code structure

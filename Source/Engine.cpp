@@ -11,6 +11,37 @@ namespace
 }
 
 //==============================================================================
+//==============================================================================
+struct Engine::MonoBypassFix final : public AudioProcessor
+{
+    MonoBypassFix() : AudioProcessor (BusesProperties().withInput  ("In",  AudioChannelSet::stereo(), true)
+                                                        .withOutput ("Out", AudioChannelSet::stereo(), true)) {}
+
+    std::atomic<bool> slotBypassed { false };
+
+    void processBlock (AudioBuffer<float>& buffer, MidiBuffer&) override
+    {
+        if (slotBypassed.load() && buffer.getNumChannels() >= 2)
+            buffer.copyFrom (1, 0, buffer, 0, 0, buffer.getNumSamples());
+    }
+
+    const String getName() const override                        { return "Mono bypass fix"; }
+    void prepareToPlay (double, int) override                    {}
+    void releaseResources() override                             {}
+    double getTailLengthSeconds() const override                 { return 0.0; }
+    bool acceptsMidi() const override                            { return false; }
+    bool producesMidi() const override                           { return false; }
+    AudioProcessorEditor* createEditor() override                { return nullptr; }
+    bool hasEditor() const override                              { return false; }
+    int getNumPrograms() override                                { return 1; }
+    int getCurrentProgram() override                             { return 0; }
+    void setCurrentProgram (int) override                        {}
+    const String getProgramName (int) override                   { return {}; }
+    void changeProgramName (int, const String&) override         {}
+    void getStateInformation (MemoryBlock&) override             {}
+    void setStateInformation (const void*, int) override         {}
+};
+
 Engine::Engine()
 {
     PropertiesFile::Options options;
@@ -48,6 +79,7 @@ Engine::Engine()
     graph.setPlayHead (&playHead);   // i nodi ricevono questo tempo (vedi TempoPlayHead)
     player.setProcessor (&graph);
     tuner->inputGainDb = (float) props().getDoubleValue ("inputGainDb", 0.0);
+    setOutputGainDb ((float) props().getDoubleValue ("outputGainDb", 0.0));
 
     // Scheda audio: ripristina l'ultima configurazione, altrimenti preferisci ASIO
     auto savedDevice = props().getXmlValue ("audioDevice");
@@ -67,6 +99,7 @@ Engine::Engine()
     }
 
     deviceManager.addAudioCallback (&recorder);
+    lastAudioSetupKey = getAudioSetupKey();
     deviceManager.addChangeListener (this);
 
     enableAllMidiInputs();
@@ -143,6 +176,19 @@ void Engine::changeListenerCallback (ChangeBroadcaster* source)
 {
     if (source == &deviceManager)
     {
+        // Lo stesso messaggio arriva anche quando si collega o scollega una periferica MIDI:
+        // in quel caso la scheda audio è la stessa e non serve ricostruire né fermare REC
+        if (const auto key = getAudioSetupKey(); key == lastAudioSetupKey)
+        {
+            enableAllMidiInputs();
+            sendChangeMessage();
+            return;
+        }
+        else
+        {
+            lastAudioSetupKey = key;
+        }
+
         // La scheda audio è cambiata: i canali di ingresso/uscita del grafo potrebbero essere diversi
         rewire();
 
@@ -230,6 +276,13 @@ bool Engine::loadPluginIntoSlot (int slot, const PluginDescription& desc, String
     return true;
 }
 
+// Nel registro: utile per capire i problemi di canali (mono/stereo)
+static void logPluginChannels (const String& name, const AudioProcessor& p)
+{
+    PluginScanner::log ("PLUGIN " + name + ": " + String (p.getTotalNumInputChannels()) + " in, "
+                        + String (p.getTotalNumOutputChannels()) + " out");
+}
+
 void Engine::installInSlot (int slot, std::unique_ptr<AudioPluginInstance> instance,
                             const PluginDescription& description, UpdateKind kind)
 {
@@ -239,6 +292,8 @@ void Engine::installInSlot (int slot, std::unique_ptr<AudioPluginInstance> insta
     {
         slots[(size_t) slot].node = node->nodeID;
         slots[(size_t) slot].description = description;
+
+        logPluginChannels (description.name, *node->getProcessor());
         slots[(size_t) slot].userBypassed = false;
         listenTo (node->nodeID);
         slots[(size_t) slot].customName.clear();
@@ -390,10 +445,30 @@ void Engine::connectNodes (NodeID from, NodeID to, int maxDestChannels)
         graph.addConnection ({ { from, jmin (c, outs - 1) }, { to, c } }, UpdateKind::none);
 }
 
+String Engine::getAudioSetupKey() const
+{
+    auto* device = deviceManager.getCurrentAudioDevice();
+
+    if (device == nullptr)
+        return {};
+
+    const auto setup = deviceManager.getAudioDeviceSetup();
+    return device->getTypeName() + "|" + device->getName() + "|" + String (setup.sampleRate) + "|" + String (setup.bufferSize)
+         + "|" + setup.inputChannels.toString (2) + "|" + setup.outputChannels.toString (2)
+         + "|" + String (device->getActiveInputChannels().countNumberOfSetBits())
+         + "|" + String (device->getActiveOutputChannels().countNumberOfSetBits());
+}
+
 void Engine::rewire()
 {
     for (const auto& c : graph.getConnections())
         graph.removeConnection (c, UpdateKind::none);
+
+    for (auto id : monoFixNodes)
+        graph.removeNode (id, UpdateKind::none);
+
+    monoFixNodes.clear();
+    monoFix.fill (nullptr);
 
     // Ingresso della chitarra (mono) -> entrambi i canali dell'accordatore
     if (auto* in = graph.getNodeForId (inputNode))
@@ -410,12 +485,30 @@ void Engine::rewire()
 
     NodeID previous = tunerNode;
 
-    for (const auto& s : slots)
+    for (int i = 0; i < numSlots; ++i)
     {
-        if (s.node.has_value())
+        const auto& s = slots[(size_t) i];
+
+        if (! s.node.has_value())
+            continue;
+
+        connectNodes (previous, *s.node, 2);
+        previous = *s.node;
+
+        // mono in, stereo out: in bypass il destro resterebbe muto (vedi MonoBypassFix)
+        if (auto* node = graph.getNodeForId (*s.node))
         {
-            connectNodes (previous, *s.node, 2);
-            previous = *s.node;
+            auto* p = node->getProcessor();
+
+            if (p->getTotalNumInputChannels() == 1 && p->getTotalNumOutputChannels() >= 2)
+            {
+                auto fix = std::make_unique<MonoBypassFix>();
+                monoFix[(size_t) i] = fix.get();
+                const auto fixId = graph.addNode (std::move (fix), {}, UpdateKind::none)->nodeID;
+                monoFixNodes.add (fixId);
+                connectNodes (previous, fixId, 2);
+                previous = fixId;
+            }
         }
     }
 
@@ -434,6 +527,9 @@ void Engine::updateBypassStates()
                 const bool shouldBypass = ! isSlotActive (i);
                 if (node->userRequestedBypass() != shouldBypass)
                     node->setBypassed (shouldBypass);
+
+                if (auto* fix = monoFix[(size_t) i])
+                    fix->slotBypassed = shouldBypass;
             }
 }
 
@@ -774,6 +870,7 @@ void Engine::setButtonControlsSlot (int index, int slot, bool controls)
 //==============================================================================
 // MIDI: numeri CC modificabili nel file di impostazioni (ChainRig.settings)
 int Engine::getButtonCC (int index) const   { return appProperties.getUserSettings()->getIntValue ("cc_button" + String (index + 1), 80 + index); }
+int Engine::getTapTempoCC() const           { return appProperties.getUserSettings()->getIntValue ("cc_tapTempo", 87); }
 int Engine::getTunerCC() const              { return appProperties.getUserSettings()->getIntValue ("cc_tuner", 84); }
 int Engine::getNextPresetCC() const         { return appProperties.getUserSettings()->getIntValue ("cc_nextPreset", 85); }
 int Engine::getPrevPresetCC() const         { return appProperties.getUserSettings()->getIntValue ("cc_prevPreset", 86); }
@@ -879,6 +976,9 @@ void Engine::handleControllerOnMessageThread (int cc, int value)
     if (cc == getTunerCC())
         apply (tunerActive, [this] (bool on) { setTunerActive (on); });
 
+    if (pressed && cc == getTapTempoCC())
+        tapTempo();
+
     if (pressed && cc == getNextPresetCC()) loadAdjacentPreset (1);
     if (pressed && cc == getPrevPresetCC()) loadAdjacentPreset (-1);
 }
@@ -900,6 +1000,13 @@ void Engine::setInputChannel (int channelIndex)
     props().setValue ("inputChannel", inputChannel);
     rewire();
     sendChangeMessage();
+}
+
+void Engine::setOutputGainDb (float db)
+{
+    outputGainDb = jlimit (minOutputGainDb, maxOutputGainDb, db);
+    recorder.setOutputGain (outputGainDb <= minOutputGainDb ? 0.0f : Decibels::decibelsToGain (outputGainDb));
+    props().setValue ("outputGainDb", (double) outputGainDb);
 }
 
 void Engine::setInputGainDb (float db)
@@ -930,7 +1037,6 @@ String Engine::getStatusText() const
     // due righe: scheda e formato; latenza, carico e buchi
     return deviceName + String::fromUTF8 ("  ·  ") + String (deviceSampleRate / 1000.0, 1)
          + String::fromUTF8 (" kHz  ·  buffer ") + String (deviceBufferSize)
-         + String::fromUTF8 ("  ·  ") + String (roundToInt (getBpm())) + " BPM"
          + "\nlatency " + String (deviceLatencyMs, 1) + String::fromUTF8 (" ms  ·  CPU ")
          + String (roundToInt (deviceManager.getCpuUsage() * 100.0)) + String::fromUTF8 ("%  ·  peak ")
          + String (roundToInt (recentPeakLoad * 100.0f)) + String::fromUTF8 ("%  ·  xrun ")
@@ -1339,6 +1445,7 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
             slot.node = node->nodeID;
             slot.description = p.description;
             listenTo (node->nodeID);
+            logPluginChannels (p.description.name, *node->getProcessor());
         }
         else
         {
@@ -1382,6 +1489,30 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
     PluginScanner::log ("PRESET " + nameForLog + ": " + String (numReused) + " plugins reused, "
                         + String (numCreated) + " new, " + String (Time::getMillisecondCounterHiRes() - startMs, 0) + " ms");
     return errors.isEmpty();
+}
+
+void Engine::tapTempo()
+{
+    const auto now = Time::getMillisecondCounter();
+
+    // dopo una pausa lunga si ricomincia a contare
+    if (! tapTimes.isEmpty() && now - tapTimes.getLast() > 2000)
+        tapTimes.clearQuick();
+
+    tapTimes.add (now);
+
+    while (tapTimes.size() > 5)   // media sugli ultimi 4 intervalli
+        tapTimes.remove (0);
+
+    if (tapTimes.size() < 2)
+        return;
+
+    const double interval = (double) (tapTimes.getLast() - tapTimes.getFirst()) / (double) (tapTimes.size() - 1);
+    const double bpm = jlimit (30.0, 300.0, 60000.0 / interval);
+
+    playHead.bpm = std::round (bpm);   // a tempo intero: è quello che si legge e si ricorda
+    recoveryPending = true;      // come i pedali: niente "modifiche non salvate"
+    sendChangeMessage();
 }
 
 void Engine::setBpm (double bpm)
