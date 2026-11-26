@@ -5,6 +5,8 @@ All notable changes to ChainRig. Versions follow [semantic versioning](https://s
 ## [Unreleased]
 
 ### Added
+- Footswitch scenes: each footswitch can be a switch (turns its slots on and off) or a scene (recalls which slots are on and off). Scenes are saved in the preset and can be recalled over MIDI.
+- Screenshot in the README.
 - App icon: a bike chainring with a guitar pick at two o'clock, black on yellow (`assets/logo.svg`). Used for the Windows executable and taskbar, the macOS app and the README.
 
 ## [0.2.1] - 2026-11-26

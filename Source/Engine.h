@@ -23,11 +23,17 @@ public:
     static constexpr int numSlots   = 10;
     static constexpr int numButtons = 4;
 
+    /** switch: accende e spegne i posti assegnati.
+        scene: richiama un'istantanea di quali posti sono accesi (una sola scena attiva alla volta). */
+    enum class ButtonMode { toggle, scene };
+
     struct TouchButton
     {
         juce::String label;
-        bool active = false;
-        juce::Array<int> slots;   // posti controllati: accesi solo se il pulsante è attivo
+        bool active = false;          // switch: acceso; scena: è la scena attiva
+        ButtonMode mode = ButtonMode::toggle;
+        juce::Array<int> slots;       // switch: posti controllati (accesi solo se il pulsante è attivo)
+        juce::Array<int> sceneOn;     // scena: posti accesi; gli altri posti pieni vanno in bypass
     };
 
     enum class MidiMode { momentary, absolute };
@@ -95,6 +101,9 @@ public:
     void setButtonActive (int index, bool active);
     void setButtonLabel (int index, const juce::String& label);
     void setButtonControlsSlot (int index, int slot, bool controls);
+    void setButtonMode (int index, ButtonMode mode);
+    void storeScene (int index);      // salva nella scena lo stato on/off attuale dei posti
+    void recallScene (int index);     // applica la scena (istantaneo, nessun plugin ricaricato)
 
     int getButtonCC (int index) const;
     int getTunerCC() const;

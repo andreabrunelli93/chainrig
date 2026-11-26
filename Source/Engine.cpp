@@ -290,12 +290,15 @@ void Engine::swapSlots (int a, int b)
     // Anche le assegnazioni dei pulsanti seguono il plugin
     for (auto& button : buttons)
     {
-        const bool hasA = button.slots.contains (a);
-        const bool hasB = button.slots.contains (b);
-        button.slots.removeAllInstancesOf (a);
-        button.slots.removeAllInstancesOf (b);
-        if (hasA) button.slots.add (b);
-        if (hasB) button.slots.add (a);
+        for (auto* list : { &button.slots, &button.sceneOn })
+        {
+            const bool hasA = list->contains (a);
+            const bool hasB = list->contains (b);
+            list->removeAllInstancesOf (a);
+            list->removeAllInstancesOf (b);
+            if (hasA) list->add (b);
+            if (hasB) list->add (a);
+        }
     }
 
     rewire();
@@ -309,6 +312,10 @@ String Engine::getButtonDisplayName (int index) const
         return {};
 
     const auto& button = buttons[(size_t) index];
+
+    if (button.mode == ButtonMode::scene)
+        return button.label;
+
     auto sorted = button.slots;
     sorted.sort();
 
@@ -354,8 +361,9 @@ void Engine::moveSlot (int from, int to)
     slots = moved;
 
     for (auto& button : buttons)
-        for (auto& s : button.slots)
-            s = oldToNew[(size_t) s];
+        for (auto* list : { &button.slots, &button.sceneOn })
+            for (auto& s : *list)
+                s = oldToNew[(size_t) s];
 
     rewire();
     markDirty();
@@ -615,7 +623,7 @@ void Engine::setSlotUserBypass (int slot, bool bypassed)
 bool Engine::isSlotControlledByButton (int slot) const
 {
     for (const auto& b : buttons)
-        if (b.slots.contains (slot))
+        if (b.mode == ButtonMode::toggle && b.slots.contains (slot))
             return true;
     return false;
 }
@@ -630,7 +638,7 @@ bool Engine::isSlotActive (int slot) const
 
     // Controllato da uno o più pulsanti: suona se almeno uno è acceso
     for (const auto& b : buttons)
-        if (b.active && b.slots.contains (slot))
+        if (b.mode == ButtonMode::toggle && b.active && b.slots.contains (slot))
             return true;
 
     return false;
@@ -644,7 +652,12 @@ const Engine::TouchButton& Engine::getButton (int index) const
 
 void Engine::toggleButton (int index)
 {
-    if (isPositiveAndBelow (index, numButtons))
+    if (! isPositiveAndBelow (index, numButtons))
+        return;
+
+    if (buttons[(size_t) index].mode == ButtonMode::scene)
+        recallScene (index);   // una scena si richiama sempre, non si "spegne"
+    else
         setButtonActive (index, ! buttons[(size_t) index].active);
 }
 
@@ -652,6 +665,13 @@ void Engine::setButtonActive (int index, bool active)
 {
     if (! isPositiveAndBelow (index, numButtons))
         return;
+
+    if (buttons[(size_t) index].mode == ButtonMode::scene)
+    {
+        if (active)
+            recallScene (index);
+        return;
+    }
 
     buttons[(size_t) index].active = active;
     updateBypassStates();
@@ -666,6 +686,73 @@ void Engine::setButtonLabel (int index, const String& label)
 
     buttons[(size_t) index].label = label.trim().toUpperCase();
     markDirty();
+    sendChangeMessage();
+}
+
+void Engine::setButtonMode (int index, ButtonMode mode)
+{
+    if (! isPositiveAndBelow (index, numButtons) || buttons[(size_t) index].mode == mode)
+        return;
+
+    auto& b = buttons[(size_t) index];
+    b.mode = mode;
+    b.active = false;
+
+    if (mode == ButtonMode::scene)
+    {
+        b.slots.clear();   // una scena non "possiede" posti: li accende o spegne tutti
+        if (b.label == defaultButtonLabels[index])
+            b.label = "SCENE " + String::charToString ((juce_wchar) ('A' + index));
+        storeScene (index);   // parte dallo stato attuale, così non è vuota
+    }
+    else if (b.label.startsWith ("SCENE "))
+    {
+        b.label = defaultButtonLabels[index];
+    }
+
+    updateBypassStates();
+    markDirty();
+    sendChangeMessage();
+}
+
+void Engine::storeScene (int index)
+{
+    if (! isPositiveAndBelow (index, numButtons))
+        return;
+
+    auto& b = buttons[(size_t) index];
+    b.sceneOn.clear();
+
+    for (int s = 0; s < numSlots; ++s)
+        if (! isSlotEmpty (s) && ! slots[(size_t) s].userBypassed)
+            b.sceneOn.add (s);
+
+    // salvare lo stato attuale lo rende la scena attiva
+    for (auto& other : buttons)
+        if (other.mode == ButtonMode::scene)
+            other.active = (&other == &b);
+
+    markDirty();
+    sendChangeMessage();
+}
+
+void Engine::recallScene (int index)
+{
+    if (! isPositiveAndBelow (index, numButtons) || buttons[(size_t) index].mode != ButtonMode::scene)
+        return;
+
+    const auto& scene = buttons[(size_t) index].sceneOn;
+
+    for (int s = 0; s < numSlots; ++s)
+        if (! isSlotEmpty (s))
+            slots[(size_t) s].userBypassed = ! scene.contains (s);
+
+    for (int i = 0; i < numButtons; ++i)
+        if (buttons[(size_t) i].mode == ButtonMode::scene)
+            buttons[(size_t) i].active = (i == index);
+
+    updateBypassStates();
+    recoveryPending = true;   // come i pedali: è uso dal vivo, non una modifica del preset
     sendChangeMessage();
 }
 
@@ -1079,6 +1166,12 @@ var Engine::createPresetState() const
         for (auto s : b.slots)
             controlled.add (s);
         buttonObj->setProperty ("slots", controlled);
+        buttonObj->setProperty ("mode", b.mode == ButtonMode::scene ? "scene" : "switch");
+
+        Array<var> sceneOn;
+        for (auto s : b.sceneOn)
+            sceneOn.add (s);
+        buttonObj->setProperty ("sceneOn", sceneOn);
 
         buttonList.add (var (buttonObj.release()));
     }
@@ -1269,11 +1362,18 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
             button.label  = b["label"].toString();
             button.active = (bool) b["active"];
             button.slots.clear();
+            button.sceneOn.clear();
+            button.mode = b["mode"].toString() == "scene" ? ButtonMode::scene : ButtonMode::toggle;
 
             if (const auto* controlled = b["slots"].getArray())
                 for (const auto& s : *controlled)
                     if (isPositiveAndBelow ((int) s, numSlots))
                         button.slots.addIfNotAlreadyThere ((int) s);
+
+            if (const auto* on = b["sceneOn"].getArray())
+                for (const auto& s : *on)
+                    if (isPositiveAndBelow ((int) s, numSlots))
+                        button.sceneOn.addIfNotAlreadyThere ((int) s);
         }
     }
 
@@ -1319,7 +1419,9 @@ void Engine::newEmptyPreset()
     {
         buttons[(size_t) i].label = defaultButtonLabels[i];
         buttons[(size_t) i].active = false;
+        buttons[(size_t) i].mode = ButtonMode::toggle;
         buttons[(size_t) i].slots.clear();
+        buttons[(size_t) i].sceneOn.clear();
     }
 
     currentPresetFile = File();

@@ -6,6 +6,8 @@ A live-performance host for guitarists: a 10-slot VST3 chain, 4 large touch foot
 a tuner, MIDI foot controller support, presets, an output meter and a built-in recorder.
 Built with JUCE 9 and C++20 for Windows (ASIO) on touch tablets. It also runs on macOS and Linux.
 
+![ChainRig: a 5-plugin chain with three scene footswitches and one switch](docs/screenshot.png)
+
 ## Download
 
 Get the latest version from the **[Releases page](https://github.com/andreabrunelli93/chainrig/releases/latest)**:
@@ -22,10 +24,11 @@ You also need your own VST3 plugins and, on Windows, your audio interface's ASIO
 - **10-slot serial chain.** Tap a slot to pick a plugin from your list. The same menu opens the plugin's editor, bypasses, replaces, moves or removes it. Empty slots are skipped.
 - **Drag to reorder.** Drag a slot onto an empty slot to move it there, or onto an occupied slot to insert it and shift the others. Footswitch assignments follow the plugins.
 - **Slot name and type.** From the slot menu: **Rename...** (leave empty to go back to the plugin name) and **Type**: amp, cab/IR, drive, compressor, EQ, modulation, delay, reverb, other. The type sets the slot's icon and tag. "Automatic" guesses it from the plugin's category and name. Name and type are stored in the preset.
-- **4 large footswitches.** Each one turns its assigned slots on and off, and shows their names (for example "DRIVE + DELAY"). A slot assigned to a footswitch only plays while that footswitch is on.
+- **4 large footswitches, switch or scene.** In **switch** mode a footswitch turns its assigned slots on and off and shows their names (for example "DRIVE + DELAY"). A slot assigned to a switch only plays while that switch is on.
+  In **scene** mode it recalls a snapshot of which slots are on and which are off (for example CLEAN, CRUNCH, LEAD). Only one scene is lit at a time. In edit mode, tap the footswitch and choose **Mode**, then **Save current on/off to this scene**. Scenes are stored in the preset, so every rig has its own.
 - **Tuner** (YIN). It works on the input, before the chain, and mutes the output while you tune. It shows the note, octave, cents, frequency and the nearest standard-tuning string.
 - **Gapless preset switching.** Plugins already in the chain are kept (even if they move to another slot) and only receive the new settings. New plugins are created while the old chain keeps playing, then the chain is swapped in one step.
-- **Presets.** One readable JSON file (`.chainrig`) per preset, in `Documents/ChainRig/Preset`. A preset stores every plugin with its full state, the bypass states, slot names and types, footswitch assignments and the tempo. Switch presets with `<` / `>` or over MIDI.
+- **Presets.** One readable JSON file (`.chainrig`) per preset, in `Documents/ChainRig/Preset`. A preset stores every plugin with its full state, the bypass states, slot names and types, footswitch modes, assignments and scenes, and the tempo. Switch presets with `<` / `>` or over MIDI.
 - **Unsaved changes.** An amber dot and "UNSAVED" next to the preset name show changes since the last save: plugins loaded, moved or removed, bypass, names, types, footswitch assignments, tempo, and parameter changes inside a plugin. Turning footswitches on and off does not count. Switching preset from the touch screen asks whether to save first. Switching from a MIDI controller never asks, so it cannot block you on stage.
 - **Crash recovery.** Every 10 s, if something changed, the full chain is written to a recovery file next to the settings. A clean exit deletes it. If ChainRig closed unexpectedly, the next launch restores the chain as it was and tells you. If restoring itself crashes (for example a plugin that crashes on load), the following launch skips it and opens the last preset instead.
 - **Tempo (BPM).** Each preset sends a tempo to the plugins, so tempo-synced delays and reverbs behave. Set it from the preset menu: **Tempo: 120 BPM...**.
@@ -73,7 +76,7 @@ Only VST3 plugins are hosted. Audio Units are disabled (`JUCE_PLUGINHOST_AU=0`).
 2. **Settings → Guitar input**: pick the input your guitar is plugged into.
 3. **Settings → Choose plugins...**: filter by name, tick the plugins you use live and press **APPLY**. **None** unticks everything visible. **Advanced...** opens JUCE's full plugin list, where you can add custom folders.
 4. Tap an empty slot → **Choose plugin** to load a plugin.
-5. **EDIT** → tap a footswitch to choose the slots it controls. Tap **EDIT** again to leave edit mode.
+5. **EDIT** → tap a footswitch to choose the slots it controls, or switch it to scene mode and save the current on/off state. Tap **EDIT** again to leave edit mode.
 6. Tap the preset name → **Save as...**.
 
 For the stage: **Settings → Full screen**. On Windows you can put a shortcut to `ChainRig.exe` in the startup folder (Win+R → `shell:startup`), so it starts full screen on the last preset.

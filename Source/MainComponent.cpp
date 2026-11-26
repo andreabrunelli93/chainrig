@@ -226,12 +226,15 @@ void BigButton::paint (Graphics& g)
                       Justification::centred, 1, 0.45f);
     y += labelH + 14.0f;
 
+    const bool isScene = button.mode == Engine::ButtonMode::scene;
+    const String what = isScene ? "scene  " + String::fromUTF8 ("·  ") + String (button.sceneOn.size()) + " on"
+                                : describeSlots (button.slots);
     String sub;
     if (edit)
-        sub = button.slots.isEmpty() ? "tap to assign slots"
-                                     : describeSlots (button.slots) + String::fromUTF8 ("  ·  tap to edit");
+        sub = (! isScene && button.slots.isEmpty()) ? String ("tap to assign slots")
+                                                    : what + String::fromUTF8 ("  ·  tap to edit");
     else
-        sub = describeSlots (button.slots) + String::fromUTF8 ("  ·  CC ") + String (engine.getButtonCC (index));
+        sub = what + String::fromUTF8 ("  ·  CC ") + String (engine.getButtonCC (index));
 
     g.setColour (edit ? Palette::accent : (on ? Palette::warmText : Palette::textFaint));
     g.setFont (Fonts::mono (12.0f));
@@ -1343,27 +1346,54 @@ void MainComponent::bigButtonPressed (int index)
 void MainComponent::showBigButtonEditMenu (int index)
 {
     const auto& button = engine.getButton (index);
+    const bool isScene = button.mode == Engine::ButtonMode::scene;
 
-    enum { renameId = 1, slotBase = 100 };
+    enum { renameId = 1, modeSwitch, modeScene, storeSceneId, slotBase = 100 };
 
     PopupMenu menu;
     menu.addSectionHeader ("Footswitch " + String (index + 1) + "  (MIDI CC " + String (engine.getButtonCC (index)) + ")");
-    menu.addItem (renameId, "Name when no slots are assigned (now: " + button.label + ")...");
-    menu.addSectionHeader ("Slots it switches on/off");
+    menu.addItem (modeSwitch, "Mode: switch (turns slots on/off)", true, ! isScene);
+    menu.addItem (modeScene,  "Mode: scene (recalls a snapshot)", true, isScene);
+    menu.addSeparator();
 
-    for (int s = 0; s < Engine::numSlots; ++s)
+    if (isScene)
     {
-        const String name = engine.isSlotEmpty (s) ? String ("(empty)") : engine.getSlotName (s);
-        menu.addItem (slotBase + s, String (s + 1) + ".  " + name, true, button.slots.contains (s));
+        menu.addItem (storeSceneId, "Save current on/off to this scene");
+        menu.addItem (renameId, "Rename scene (now: " + button.label + ")...");
+        menu.addSectionHeader ("Slots on in this scene");
+
+        for (int s = 0; s < Engine::numSlots; ++s)
+            if (! engine.isSlotEmpty (s))
+                menu.addItem (-1 - s, String (s + 1) + ".  " + engine.getSlotName (s), false, button.sceneOn.contains (s));
+    }
+    else
+    {
+        menu.addItem (renameId, "Name when no slots are assigned (now: " + button.label + ")...");
+        menu.addSectionHeader ("Slots it switches on/off");
+
+        for (int s = 0; s < Engine::numSlots; ++s)
+        {
+            const String name = engine.isSlotEmpty (s) ? String ("(empty)") : engine.getSlotName (s);
+            menu.addItem (slotBase + s, String (s + 1) + ".  " + name, true, button.slots.contains (s));
+        }
     }
 
     menu.showMenuAsync (PopupMenu::Options().withTargetComponent (bigButtons[index]),
-                        [this, index] (int result)
+                        [this, index, isScene] (int result)
     {
         if (result == renameId)
         {
-            askText ("Footswitch name when no slots are assigned", engine.getButton (index).label,
+            askText (isScene ? "Scene name" : "Footswitch name when no slots are assigned", engine.getButton (index).label,
                      [this, index] (String text) { engine.setButtonLabel (index, text); });
+        }
+        else if (result == modeSwitch || result == modeScene)
+        {
+            engine.setButtonMode (index, result == modeScene ? Engine::ButtonMode::scene : Engine::ButtonMode::toggle);
+            showBigButtonEditMenu (index);
+        }
+        else if (result == storeSceneId)
+        {
+            engine.storeScene (index);
         }
         else if (result >= slotBase)
         {
