@@ -955,11 +955,33 @@ bool Engine::loadPreset (const File& file, String& errors)
         return false;
     }
 
+    const auto startMs = Time::getMillisecondCounterHiRes();
     setBpm (root.hasProperty ("bpm") ? (double) root["bpm"] : 120.0);
 
-    // Svuota tutto senza ricostruire il grafo a ogni passo
-    for (int i = 0; i < numSlots; ++i)
-        removeSlotNode (i, UpdateKind::none);
+    // Cambio preset senza buco:
+    //  1. i plugin già caricati e uguali vengono riusati (anche se cambiano posto) e ricevono solo il nuovo stato;
+    //  2. quelli nuovi si creano prima, mentre la catena vecchia continua a suonare;
+    //  3. solo alla fine la catena cambia, con un'unica ricostruzione del grafo.
+    struct Planned
+    {
+        bool used = false;
+        int reuseFrom = -1;                                   // posto attuale da riusare
+        std::unique_ptr<AudioPluginInstance> instance;        // oppure plugin nuovo
+        PluginDescription description;
+        MemoryBlock state;
+        bool bypassed = false;
+        String label;
+        SlotKind kind = SlotKind::automatic;
+    };
+
+    std::array<Planned, numSlots> plan;
+    std::array<bool, numSlots> reused {};
+    int numReused = 0, numCreated = 0;
+
+    const auto samePlugin = [] (const PluginDescription& a, const PluginDescription& b)
+    {
+        return a.pluginFormatName == b.pluginFormatName && a.uniqueId == b.uniqueId && a.name == b.name;
+    };
 
     if (const auto* slotList = root["slots"].getArray())
     {
@@ -971,34 +993,101 @@ bool Engine::loadPreset (const File& file, String& errors)
             if (pluginXml.isEmpty())
                 continue;
 
-            PluginDescription desc;
-            if (auto xml = parseXML (pluginXml); xml == nullptr || ! desc.loadFromXml (*xml))
+            auto& p = plan[(size_t) i];
+
+            if (auto xml = parseXML (pluginXml); xml == nullptr || ! p.description.loadFromXml (*xml))
             {
                 errors << "Posto " << (i + 1) << ": descrizione plugin illeggibile\n";
                 continue;
             }
 
-            String error;
-            PluginDescription used;
-            auto instance = createInstance (desc, error, used);
+            p.state.fromBase64Encoding (s["state"].toString());
+            p.bypassed = (bool) s["bypassed"];
+            p.label    = s["label"].toString();
+            p.kind     = getSlotKindFromId (s["kind"].toString());
 
-            if (instance == nullptr)
+            // stesso plugin già caricato? prima nello stesso posto, poi in qualsiasi altro
+            const auto canReuse = [&] (int j)
             {
-                errors << "Posto " << (i + 1) << ": impossibile caricare " << desc.name
+                return ! reused[(size_t) j] && slots[(size_t) j].node.has_value()
+                        && samePlugin (slots[(size_t) j].description, p.description);
+            };
+
+            int from = canReuse (i) ? i : -1;
+            for (int j = 0; j < numSlots && from < 0; ++j)
+                if (canReuse (j))
+                    from = j;
+
+            if (from >= 0)
+            {
+                reused[(size_t) from] = true;
+                p.reuseFrom = from;
+                p.used = true;
+                ++numReused;
+                continue;
+            }
+
+            String error;
+            PluginDescription usedDescription;
+            p.instance = createInstance (p.description, error, usedDescription);
+
+            if (p.instance == nullptr)
+            {
+                errors << "Posto " << (i + 1) << ": impossibile caricare " << p.description.name
                        << (error.isNotEmpty() ? " (" + error + ")" : String()) << "\n";
                 continue;
             }
 
-            MemoryBlock state;
-            if (state.fromBase64Encoding (s["state"].toString()) && state.getSize() > 0)
-                instance->setStateInformation (state.getData(), (int) state.getSize());
+            p.description = usedDescription;
+            if (p.state.getSize() > 0)
+                p.instance->setStateInformation (p.state.getData(), (int) p.state.getSize());
 
-            installInSlot (i, std::move (instance), used, UpdateKind::none);
-            slots[(size_t) i].userBypassed = (bool) s["bypassed"];
-            slots[(size_t) i].customName   = s["label"].toString();
-            slots[(size_t) i].kind         = getSlotKindFromId (s["kind"].toString());
+            p.used = true;
+            ++numCreated;
         }
     }
+
+    // Da qui la catena cambia: tutto quello che era lento è già stato fatto
+    std::array<Slot, numSlots> newSlots;
+
+    for (int i = 0; i < numSlots; ++i)
+        if (const auto& p = plan[(size_t) i]; p.used && p.reuseFrom >= 0)
+            newSlots[(size_t) i] = slots[(size_t) p.reuseFrom];
+
+    for (int j = 0; j < numSlots; ++j)
+        if (! reused[(size_t) j])
+            removeSlotNode (j, UpdateKind::none);
+
+    for (int i = 0; i < numSlots; ++i)
+    {
+        auto& p = plan[(size_t) i];
+        auto& slot = newSlots[(size_t) i];
+
+        if (! p.used)
+            continue;
+
+        if (p.reuseFrom >= 0)
+        {
+            // stesso plugin: basta applicare le impostazioni del preset
+            if (auto* node = graph.getNodeForId (*slot.node); node != nullptr && p.state.getSize() > 0)
+                node->getProcessor()->setStateInformation (p.state.getData(), (int) p.state.getSize());
+        }
+        else if (auto node = graph.addNode (std::move (p.instance), std::nullopt, UpdateKind::none))
+        {
+            slot.node = node->nodeID;
+            slot.description = p.description;
+        }
+        else
+        {
+            continue;
+        }
+
+        slot.userBypassed = p.bypassed;
+        slot.customName   = p.label;
+        slot.kind         = p.kind;
+    }
+
+    slots = newSlots;
 
     if (const auto* buttonList = root["buttons"].getArray())
     {
@@ -1024,6 +1113,9 @@ bool Engine::loadPreset (const File& file, String& errors)
 
     rewire();
     sendChangeMessage();
+
+    PluginScanner::log ("PRESET " + file.getFileNameWithoutExtension() + ": " + String (numReused) + " plugin riusati, "
+                        + String (numCreated) + " nuovi, " + String (Time::getMillisecondCounterHiRes() - startMs, 0) + " ms");
     return errors.isEmpty();
 }
 

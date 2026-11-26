@@ -13,6 +13,7 @@ The interface text is in Italian.
 - **Slot name and type.** From the slot menu: **Rinomina...** (rename; leave empty to go back to the plugin name) and **Tipo** (type): amp, cab/IR, drive, compressor, EQ, modulation, delay, reverb, other. The type sets the slot's icon and tag. "Automatic" guesses it from the plugin's category and name. Name and type are stored in the preset.
 - **4 large footswitches.** Each one turns its assigned slots on and off, and shows their names (for example "DRIVE + DELAY"). A slot assigned to a footswitch only plays while that footswitch is on.
 - **Tuner** (YIN). It works on the input, before the chain, and mutes the output while you tune. It shows the note, octave, cents, frequency and the nearest standard-tuning string.
+- **Gapless preset switching.** Plugins already in the chain are kept (even if they move to another slot) and only receive the new settings. New plugins are created while the old chain keeps playing, then the chain is swapped in one step.
 - **Presets.** One readable JSON file (`.chainrig`) per preset, in `Documents/ChainRig/Preset`. A preset stores every plugin with its full state, the bypass states, slot names and types, footswitch assignments and the tempo. Switch presets with `<` / `>` or over MIDI.
 - **Tempo (BPM).** Each preset sends a tempo to the plugins, so tempo-synced delays and reverbs behave. Set it from the preset menu: **Tempo: 120 BPM...**.
 - **Plugin chooser.** Tick only the plugins you use live. The others are never loaded, which matters if you have hundreds of plugins installed.
@@ -102,7 +103,7 @@ Bluetooth: controllers sold with their own USB dongle work out of the box. For n
 
 ## Known limitations
 
-- Loading or replacing a plugin causes a short silence. Bypass and footswitches are click-free.
+- Loading a plugin that is not already in the chain still takes a moment (the old chain keeps playing meanwhile). Plugins that load large files in their state, such as amp captures, may briefly glitch while switching. Bypass and footswitches are click-free.
 - A plugin crash while playing takes down the whole application.
 - If a mono-in/stereo-out plugin is bypassed, the right channel of that slot is silent.
 - File paths stored inside plugin states (amp captures, IRs) differ between machines and must be reloaded after moving a preset to another computer.
