@@ -4,6 +4,9 @@ All notable changes to ChainRig. Versions follow [semantic versioning](https://s
 
 ## [Unreleased]
 
+### Added
+- Setlists: an ordered list of songs, each with its preset, edited from the preset menu. While a setlist is active, `<` / `>`, MIDI next/previous and Program Change follow the songs, and the preset area shows the song name and number.
+
 ## [0.2.3] - 2026-11-26
 
 ### Added

@@ -1,5 +1,6 @@
 #include "MainComponent.h"
 #include "PluginChooser.h"
+#include "SetlistEditor.h"
 #include "BinaryData.h"
 
 using namespace juce;
@@ -248,14 +249,13 @@ void BigButton::mouseDown (const MouseEvent&)
 }
 
 //==============================================================================
-void PresetSelector::setPreset (const String& newName, int newNumber, int newTotal, bool newUnsaved)
+void PresetSelector::setPreset (const String& newName, const String& newPosition, bool newUnsaved)
 {
-    if (newName == name && newNumber == number && newTotal == total && newUnsaved == unsaved)
+    if (newName == name && newPosition == position && newUnsaved == unsaved)
         return;
 
     name = newName;
-    number = newNumber;
-    total = newTotal;
+    position = newPosition;
     unsaved = newUnsaved;
     repaint();
 }
@@ -320,12 +320,13 @@ void PresetSelector::paint (Graphics& g)
     auto topLine = text.removeFromTop (16.0f);
     g.setColour (Palette::textDim);
     g.setFont (Fonts::mono (11.0f));
-    const String position = number > 0 ? "PRESET " + twoDigits (number) + " / " + twoDigits (total) : String ("NEW PRESET");
-    g.drawText (position, topLine, Justification::centredLeft);
+    const float positionW = jmin (topLine.getWidth() - (unsaved ? 90.0f : 0.0f),
+                                  GlyphArrangement::getStringWidth (Fonts::mono (11.0f), position));
+    g.drawText (position, topLine.withWidth (positionW + 2.0f), Justification::centredLeft, true);
 
     if (unsaved)
     {
-        const float x = topLine.getX() + GlyphArrangement::getStringWidth (Fonts::mono (11.0f), position) + 10.0f;
+        const float x = topLine.getX() + positionW + 10.0f;
         g.setColour (Palette::accent);
         g.drawText (String::fromUTF8 ("·  UNSAVED"), topLine.withLeft (x), Justification::centredLeft);
     }
@@ -1196,9 +1197,32 @@ void MainComponent::updateRecButton()
 
 void MainComponent::refresh()
 {
-    const auto files = engine.getPresetFiles();
-    const int number = files.indexOf (engine.getCurrentPresetFile()) + 1;
-    presetSelector.setPreset (engine.getCurrentPresetName(), number, files.size(), engine.hasUnsavedChanges());
+    const auto dot = String::fromUTF8 ("  ·  ");
+
+    if (engine.isSetlistActive())
+    {
+        // in scaletta: grande la canzone, piccolo la posizione e il preset
+        const int index = engine.getSetlistIndex();
+        const int total = engine.getSetlist().size();
+
+        if (index >= 0)
+            presetSelector.setPreset (engine.getCurrentSongName(),
+                                      "SONG " + twoDigits (index + 1) + " / " + twoDigits (total) + dot
+                                          + engine.getCurrentPresetName().toUpperCase(),
+                                      engine.hasUnsavedChanges());
+        else
+            presetSelector.setPreset (engine.getCurrentPresetName(),
+                                      "NOT IN SETLIST" + dot + engine.getCurrentSetlistFile().getFileNameWithoutExtension().toUpperCase(),
+                                      engine.hasUnsavedChanges());
+    }
+    else
+    {
+        const auto files = engine.getPresetFiles();
+        const int number = files.indexOf (engine.getCurrentPresetFile()) + 1;
+        presetSelector.setPreset (engine.getCurrentPresetName(),
+                                  number > 0 ? "PRESET " + twoDigits (number) + " / " + twoDigits (files.size()) : String ("NEW PRESET"),
+                                  engine.hasUnsavedChanges());
+    }
 
     tunerButton.setToggleState (engine.isTunerActive(), dontSendNotification);
     editButton.setToggleState (editMode, dontSendNotification);
@@ -1461,10 +1485,22 @@ void MainComponent::showBigButtonEditMenu (int index)
 //==============================================================================
 void MainComponent::showPresetMenu()
 {
-    enum { save = 1, saveAs, newPreset, openFolder, tempo, presetBase = 1000 };
+    enum { save = 1, saveAs, newPreset, openFolder, tempo, noSetlist, newSetlist, editSetlist, openSetlistFolder,
+           presetBase = 1000, setlistBase = 2000, songBase = 3000 };
 
     const auto files = engine.getPresetFiles();
     const auto current = engine.getCurrentPresetFile();
+    const auto setlistFiles = engine.getSetlistFiles();
+    const auto currentSetlist = engine.getCurrentSetlistFile();
+
+    PopupMenu setlistMenu;
+    setlistMenu.addItem (noSetlist, "No setlist: all presets", true, ! engine.isSetlistActive());
+    for (int i = 0; i < setlistFiles.size(); ++i)
+        setlistMenu.addItem (setlistBase + i, setlistFiles[i].getFileNameWithoutExtension(), true, setlistFiles[i] == currentSetlist);
+    setlistMenu.addSeparator();
+    setlistMenu.addItem (newSetlist, "New setlist...");
+    setlistMenu.addItem (editSetlist, "Edit this setlist...", engine.isSetlistActive());
+    setlistMenu.addItem (openSetlistFolder, "Open setlist folder");
 
     PopupMenu menu;
     menu.addItem (save, "Save", current.existsAsFile());
@@ -1473,8 +1509,27 @@ void MainComponent::showPresetMenu()
     menu.addItem (openFolder, "Open preset folder");
     menu.addSeparator();
     menu.addItem (tempo, "Tempo: " + String (roundToInt (engine.getBpm())) + " BPM...");
+    menu.addSubMenu (engine.isSetlistActive() ? "Setlist: " + currentSetlist.getFileNameWithoutExtension() : String ("Setlist"),
+                     setlistMenu);
 
-    if (! files.isEmpty())
+    if (engine.isSetlistActive())
+    {
+        // in scaletta: prima le canzoni, i preset restano in un sottomenu
+        menu.addSectionHeader ("Songs");
+        const auto& songs = engine.getSetlist();
+        for (int i = 0; i < songs.size(); ++i)
+        {
+            const auto& s = songs.getReference (i);
+            menu.addItem (songBase + i, twoDigits (i + 1) + ".  " + (s.song.isNotEmpty() ? s.song + String::fromUTF8 ("  ·  ") + s.preset : s.preset),
+                          true, i == engine.getSetlistIndex());
+        }
+
+        PopupMenu presetMenu;
+        for (int i = 0; i < files.size(); ++i)
+            presetMenu.addItem (presetBase + i, files[i].getFileNameWithoutExtension(), true, files[i] == current);
+        menu.addSubMenu ("All presets", presetMenu, ! files.isEmpty());
+    }
+    else if (! files.isEmpty())
     {
         menu.addSectionHeader ("Preset");
         for (int i = 0; i < files.size(); ++i)
@@ -1482,8 +1537,31 @@ void MainComponent::showPresetMenu()
     }
 
     menu.showMenuAsync (PopupMenu::Options().withTargetComponent (presetSelector),
-                        [this, files] (int result)
+                        [this, files, setlistFiles] (int result)
     {
+        if (result == noSetlist)        { engine.closeSetlist(); return; }
+        if (result == newSetlist)       { showSetlistEditor ({}); return; }
+        if (result == editSetlist)      { showSetlistEditor (engine.getCurrentSetlistFile()); return; }
+        if (result == openSetlistFolder) { engine.getSetlistFolder().startAsProcess(); return; }
+
+        if (result >= setlistBase && result - setlistBase < setlistFiles.size())
+        {
+            engine.openSetlist (setlistFiles[result - setlistBase]);
+            return;
+        }
+
+        if (result >= songBase && result - songBase < engine.getSetlist().size())
+        {
+            const int song = result - songBase;
+            confirmPresetSwitch ([this, song]
+            {
+                String errors;
+                if (! engine.loadSetlistEntry (song, errors))
+                    showError ("Could not load the song", errors);
+            });
+            return;
+        }
+
         if (result == save)
         {
             engine.savePreset (engine.getCurrentPresetFile());
@@ -1674,6 +1752,11 @@ void MainComponent::CoffeeButton::paintButton (Graphics& g, bool isMouseOver, bo
 void MainComponent::openDonationPage()
 {
     URL ("https://buymeacoffee.com/andreabrunelli").launchInDefaultBrowser();
+}
+
+void MainComponent::showSetlistEditor (const File& existing)
+{
+    launchDialog (existing.existsAsFile() ? "Edit setlist" : "New setlist", new SetlistEditor (engine, existing));
 }
 
 void MainComponent::showSettingsMenu()

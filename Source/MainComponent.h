@@ -45,7 +45,8 @@ class PresetSelector final : public juce::Component
 public:
     std::function<void()> onPrev, onNext, onMenu;
 
-    void setPreset (const juce::String& name, int number, int total, bool unsaved);
+    /** position: riga piccola in alto ("PRESET 01 / 05", "SONG 03 / 12 · CLEAN"). */
+    void setPreset (const juce::String& name, const juce::String& position, bool unsaved);
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
@@ -53,8 +54,7 @@ public:
 private:
     int zoneAt (juce::Point<int>) const;   // -1 indietro, 0 nome, 1 avanti
 
-    juce::String name;
-    int number = 0, total = 0;
+    juce::String name, position;
     bool unsaved = false;
     int pressedZone = -2;
 };
@@ -184,6 +184,7 @@ private:
     void refresh();
     void showPresetMenu();
     void showSettingsMenu();
+    void showSetlistEditor (const juce::File& existing);
     static void openDonationPage();
     void showBigButtonEditMenu (int index);
     void showAudioSettings();

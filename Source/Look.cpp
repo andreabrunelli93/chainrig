@@ -148,6 +148,14 @@ void Icons::draw (Graphics& g, Ui icon, Rectangle<float> area, Colour colour, fl
             p.startNewSubPath (9.0f, 6.0f); p.lineTo (15.0f, 12.0f); p.lineTo (9.0f, 18.0f);
             break;
 
+        case Ui::up:
+            p.startNewSubPath (6.0f, 15.0f); p.lineTo (12.0f, 9.0f); p.lineTo (18.0f, 15.0f);
+            break;
+
+        case Ui::down:
+            p.startNewSubPath (6.0f, 9.0f); p.lineTo (12.0f, 15.0f); p.lineTo (18.0f, 9.0f);
+            break;
+
         case Ui::tuningFork:
             p.startNewSubPath (9.0f, 3.0f);
             p.lineTo (9.0f, 11.0f);

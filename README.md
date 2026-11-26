@@ -29,6 +29,7 @@ You also need your own VST3 plugins and, on Windows, your audio interface's ASIO
 - **Tuner** (YIN). It works on the input, before the chain, and mutes the output while you tune. It shows the note, octave, cents, frequency and the nearest standard-tuning string.
 - **Gapless preset switching.** Plugins already in the chain are kept (even if they move to another slot) and only receive the new settings. New plugins are created while the old chain keeps playing, then the chain is swapped in one step.
 - **Presets.** One readable JSON file (`.chainrig`) per preset, in `Documents/ChainRig/Preset`. A preset stores every plugin with its full state, the bypass states, slot names and types, footswitch modes, assignments and scenes, and the tempo. Switch presets with `<` / `>` or over MIDI.
+- **Setlists.** An ordered list of songs for the gig, each with its preset (the same preset can be used by several songs). Create one from the preset menu: **Setlist → New setlist...**, add songs, name them and pick their presets. While a setlist is active, `<` / `>`, the MIDI next/previous pedals and Program Change follow the songs, and the preset area shows the song name, its number and the preset. The setlist stops at the first and last song instead of wrapping around. Setlists are small JSON files (`.chainset`) in `Documents/ChainRig/Setlists` that refer to presets by name, so they work on any computer with the same presets. **Setlist → No setlist** goes back to all presets.
 - **Unsaved changes.** An amber dot and "UNSAVED" next to the preset name show changes since the last save: plugins loaded, moved or removed, bypass, names, types, footswitch assignments, tempo, and parameter changes inside a plugin. Turning footswitches on and off does not count. Switching preset from the touch screen asks whether to save first. Switching from a MIDI controller never asks, so it cannot block you on stage.
 - **Crash recovery.** Every 10 s, if something changed, the full chain is written to a recovery file next to the settings. A clean exit deletes it. If ChainRig closed unexpectedly, the next launch restores the chain as it was and tells you. If restoring itself crashes (for example a plugin that crashes on load), the following launch skips it and opens the last preset instead.
 - **Tempo (BPM).** Each preset sends a tempo to the plugins, so tempo-synced delays and reverbs behave. Set it from the preset menu (**Tempo: 120 BPM...**), or tap it: the **TAP** button in the top bar (or a MIDI pedal) averages your last taps. Tapping counts as live use, not as an unsaved change.
@@ -100,8 +101,8 @@ All MIDI inputs are enabled automatically, including those connected after launc
 | Footswitches 1-4 | CC 80, 81, 82, 83 |
 | Tuner | CC 84 |
 | Tap tempo | CC 87 |
-| Next / previous preset | CC 85 / CC 86 |
-| Preset number N (alphabetical order) | Program Change N |
+| Next / previous preset (or song, with a setlist) | CC 85 / CC 86 |
+| Preset number N (alphabetical order), or song N+1 with a setlist | Program Change N |
 
 In **Settings → MIDI foot controller** choose how CC values are read:
 - **Momentary**: each press toggles. For controllers that send 127 on press and 0 on release.

@@ -127,6 +127,31 @@ public:
     void loadAdjacentPreset (int delta);
     void newEmptyPreset();
     juce::File getCurrentPresetFile() const       { return currentPresetFile; }
+    juce::File getPresetFileByName (const juce::String& name) const;
+
+    //==============================================================================
+    // Scaletta: elenco ordinato di canzoni, ognuna con il suo preset. Quando è attiva,
+    // < >, i CC avanti/indietro e il Program Change seguono la scaletta (senza ricominciare
+    // dall'inizio alla fine). File .chainset (JSON) in Documents/ChainRig/Setlists.
+    struct SetlistEntry
+    {
+        juce::String song;      // può essere vuoto: si mostra il nome del preset
+        juce::String preset;    // nome del preset (file senza estensione): vale su Mac e Windows
+    };
+
+    juce::File getSetlistFolder() const;
+    juce::Array<juce::File> getSetlistFiles() const;
+    bool isSetlistActive() const                  { return currentSetlistFile != juce::File(); }
+    juce::File getCurrentSetlistFile() const      { return currentSetlistFile; }
+    const juce::Array<SetlistEntry>& getSetlist() const { return setlist; }
+    int getSetlistIndex() const                   { return setlistIndex; }   // -1: preset fuori scaletta
+    juce::String getCurrentSongName() const;
+
+    static juce::Array<SetlistEntry> readSetlist (const juce::File&);
+    bool saveSetlist (const juce::File&, const juce::Array<SetlistEntry>&);   // la rende anche attiva
+    bool openSetlist (const juce::File&);
+    void closeSetlist();
+    bool loadSetlistEntry (int index, juce::String& errors);
 
     /** Vero se la catena è cambiata dall'ultimo salvataggio o caricamento
         (accendere/spegnere i pedali non conta: è l'uso normale dal vivo). */
@@ -231,6 +256,12 @@ private:
     bool tunerActive = false;
     int inputChannel = 0;
     juce::File currentPresetFile;
+
+    juce::File currentSetlistFile;
+    juce::Array<SetlistEntry> setlist;
+    int setlistIndex = -1;
+    void syncSetlistIndex();
+    void saveSetlistPosition();
 
     juce::StringArray knownMidiInputs;
     juce::String lastAudioSetupKey;          // per riconoscere i change message dovuti solo al MIDI

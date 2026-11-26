@@ -6,6 +6,7 @@ using namespace juce;
 namespace
 {
     constexpr const char* presetExtension = ".chainrig";
+    constexpr const char* setlistExtension = ".chainset";
 
     const char* defaultButtonLabels[] = { "BOOST", "DRIVE", "DELAY", "FX" };
 }
@@ -115,6 +116,15 @@ Engine::Engine()
             String errors;
             loadPreset (lastPreset, errors);
         }
+    }
+
+    // Scaletta della sessione precedente, sulla stessa canzone se il preset è ancora quello
+    if (const File lastSetlist (props().getValue ("setlist")); lastSetlist.existsAsFile())
+    {
+        currentSetlistFile = lastSetlist;
+        setlist = readSetlist (lastSetlist);
+        setlistIndex = props().getIntValue ("setlistIndex", -1);
+        syncSetlistIndex();
     }
 
     recorder.setInputChannel (inputChannel);
@@ -945,6 +955,14 @@ void Engine::handleIncomingMidiMessage (MidiInput*, const MidiMessage& message)
         {
             if (auto* self = weakThis.get())
             {
+                if (self->isSetlistActive())   // in scaletta: Program Change = numero della canzone
+                {
+                    String errors;
+                    if (isPositiveAndBelow (program, self->setlist.size()))
+                        self->loadSetlistEntry (program, errors);
+                    return;
+                }
+
                 const auto files = self->getPresetFiles();
                 if (isPositiveAndBelow (program, files.size()))
                 {
@@ -1223,6 +1241,146 @@ Array<File> Engine::getPresetFiles() const
     return files;
 }
 
+File Engine::getPresetFileByName (const String& name) const
+{
+    return getPresetFolder().getChildFile (File::createLegalFileName (name) + presetExtension);
+}
+
+//==============================================================================
+File Engine::getSetlistFolder() const
+{
+    auto folder = File::getSpecialLocation (File::userDocumentsDirectory)
+                      .getChildFile ("ChainRig").getChildFile ("Setlists");
+    folder.createDirectory();
+    return folder;
+}
+
+Array<File> Engine::getSetlistFiles() const
+{
+    auto files = getSetlistFolder().findChildFiles (File::findFiles, false, String ("*") + setlistExtension);
+    files.sort();
+    return files;
+}
+
+Array<Engine::SetlistEntry> Engine::readSetlist (const File& file)
+{
+    Array<SetlistEntry> entries;
+    const var root = JSON::parse (file);
+
+    if (auto* songs = root["songs"].getArray())
+        for (const auto& s : *songs)
+            entries.add ({ s["song"].toString(), s["preset"].toString() });
+
+    return entries;
+}
+
+bool Engine::saveSetlist (const File& fileIn, const Array<SetlistEntry>& entries)
+{
+    const auto file = fileIn.withFileExtension (setlistExtension);
+
+    Array<var> songs;
+    for (const auto& e : entries)
+    {
+        DynamicObject::Ptr o = new DynamicObject();
+        o->setProperty ("song", e.song);
+        o->setProperty ("preset", e.preset);
+        songs.add (var (o.get()));
+    }
+
+    DynamicObject::Ptr root = new DynamicObject();
+    root->setProperty ("version", 1);
+    root->setProperty ("songs", songs);
+
+    if (! file.replaceWithText (JSON::toString (var (root.get()))))
+        return false;
+
+    // se è la scaletta in uso (o una nuova), diventa quella attiva restando sulla canzone attuale
+    const auto previousSong = isPositiveAndBelow (setlistIndex, setlist.size()) ? setlist[setlistIndex] : SetlistEntry {};
+    currentSetlistFile = file;
+    setlist = entries;
+    setlistIndex = -1;
+
+    for (int i = 0; i < setlist.size(); ++i)
+        if (setlist[i].song == previousSong.song && setlist[i].preset == previousSong.preset)
+            setlistIndex = i;
+
+    syncSetlistIndex();
+    sendChangeMessage();
+    return true;
+}
+
+bool Engine::openSetlist (const File& file)
+{
+    if (! file.existsAsFile())
+        return false;
+
+    currentSetlistFile = file;
+    setlist = readSetlist (file);
+    setlistIndex = -1;
+    syncSetlistIndex();
+    sendChangeMessage();
+    return true;
+}
+
+void Engine::closeSetlist()
+{
+    currentSetlistFile = File();
+    setlist.clear();
+    setlistIndex = -1;
+    saveSetlistPosition();
+    sendChangeMessage();
+}
+
+bool Engine::loadSetlistEntry (int index, String& errors)
+{
+    if (! isPositiveAndBelow (index, setlist.size()))
+        return false;
+
+    const auto file = getPresetFileByName (setlist[index].preset);
+
+    if (! file.existsAsFile())   // resta sulla canzone attuale
+    {
+        errors = "Preset not found: " + setlist[index].preset;
+        return false;
+    }
+
+    setlistIndex = index;   // prima del caricamento: syncSetlistIndex la tiene se il preset è giusto
+    return loadPreset (file, errors);
+}
+
+String Engine::getCurrentSongName() const
+{
+    if (! isPositiveAndBelow (setlistIndex, setlist.size()))
+        return {};
+
+    const auto& e = setlist[setlistIndex];
+    return e.song.isNotEmpty() ? e.song : e.preset;
+}
+
+void Engine::syncSetlistIndex()
+{
+    if (! isSetlistActive())
+        return;
+
+    const auto presetName = currentPresetFile.getFileNameWithoutExtension();
+
+    // la canzone attuale va bene se usa il preset caricato; altrimenti la prima che lo usa
+    if (! (isPositiveAndBelow (setlistIndex, setlist.size()) && setlist[setlistIndex].preset == presetName))
+    {
+        setlistIndex = -1;
+        for (int i = 0; i < setlist.size(); ++i)
+            if (setlist[i].preset == presetName) { setlistIndex = i; break; }
+    }
+
+    saveSetlistPosition();
+}
+
+void Engine::saveSetlistPosition()
+{
+    props().setValue ("setlist", currentSetlistFile == File() ? String() : currentSetlistFile.getFullPathName());
+    props().setValue ("setlistIndex", setlistIndex);
+}
+
 String Engine::getCurrentPresetName() const
 {
     return currentPresetFile == File() ? String ("(new preset)") : currentPresetFile.getFileNameWithoutExtension();
@@ -1294,6 +1452,7 @@ bool Engine::savePreset (const File& fileIn)
         return false;
 
     currentPresetFile = file;
+    syncSetlistIndex();
     props().setValue ("lastPreset", file.getFullPathName());
     props().saveIfNeeded();
     markClean();
@@ -1314,6 +1473,7 @@ bool Engine::loadPreset (const File& file, String& errors)
     const bool ok = loadPresetState (root, errors, file.getFileNameWithoutExtension());
 
     currentPresetFile = file;
+    syncSetlistIndex();
     props().setValue ("lastPreset", file.getFullPathName());
     props().saveIfNeeded();
     markClean();
@@ -1530,6 +1690,30 @@ void Engine::setBpm (double bpm)
 
 void Engine::loadAdjacentPreset (int delta)
 {
+    if (isSetlistActive())
+    {
+        if (setlist.isEmpty())
+            return;
+
+        // in scaletta niente giro dalla fine all'inizio: sul palco è più sicuro fermarsi.
+        // Le canzoni il cui preset non esiste più vengono saltate.
+        const int step = delta < 0 ? -1 : 1;
+        int index = setlistIndex < 0 ? (step > 0 ? 0 : setlist.size() - 1) : setlistIndex + step;
+
+        for (; isPositiveAndBelow (index, setlist.size()); index += step)
+        {
+            if (getPresetFileByName (setlist[index].preset).existsAsFile())
+            {
+                String errors;
+                loadSetlistEntry (index, errors);
+                return;
+            }
+
+            PluginScanner::log ("SETLIST song " + String (index + 1) + " skipped: preset not found: " + setlist[index].preset);
+        }
+        return;
+    }
+
     const auto files = getPresetFiles();
     if (files.isEmpty())
         return;

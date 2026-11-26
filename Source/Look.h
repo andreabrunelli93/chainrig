@@ -41,7 +41,7 @@ namespace Fonts
 /** Icone a tratto disegnate con Path, per i tipi di posto e per l'interfaccia. */
 namespace Icons
 {
-    enum class Ui { prev, next, tuningFork, settings, plus, mute, close };
+    enum class Ui { prev, next, up, down, tuningFork, settings, plus, mute, close };
 
     void draw (juce::Graphics&, Engine::SlotKind, juce::Rectangle<float>, juce::Colour, float stroke = 1.8f);
     void draw (juce::Graphics&, Ui, juce::Rectangle<float>, juce::Colour, float stroke = 2.0f);

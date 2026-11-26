@@ -46,6 +46,8 @@ target_sources(ChainRig PRIVATE
     Source/PluginChooser.cpp
     Source/PluginChooser.h
     Source/PluginScanner.h
+    Source/SetlistEditor.cpp
+    Source/SetlistEditor.h
     Source/Recorder.h
     Source/UpdateChecker.h)
 
