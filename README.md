@@ -146,3 +146,9 @@ See [CHANGELOG.md](CHANGELOG.md).
 ChainRig is free software, released under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
 
 It is built on [JUCE](https://juce.com), used under JUCE's open-source (AGPLv3) licence. If you distribute a modified version, you must make its source code available under the same licence. Plugins you load in ChainRig are separate products with their own licences.
+
+## Support
+
+ChainRig is free. If it helps you on stage, you can buy me a coffee:
+
+<a href="https://buymeacoffee.com/andreabrunelli"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="48"></a>
