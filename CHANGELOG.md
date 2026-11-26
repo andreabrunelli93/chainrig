@@ -5,6 +5,7 @@ All notable changes to ChainRig. Versions follow [semantic versioning](https://s
 ## [Unreleased]
 
 ### Changed
+- Loading, replacing, moving or removing a plugin, and switching to a preset with a different chain, now fades the chain out and back in (about 8 ms out, 30 ms in) instead of cutting abruptly. The log shows a `FADE` line with the timings.
 - Preset switching skips reloading the settings of plugins whose settings are already the same (faster, no glitch from amp captures reloading).
 
 ### Added

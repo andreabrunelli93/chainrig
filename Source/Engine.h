@@ -239,6 +239,14 @@ private:
     void removeExpiredTails();
     std::array<MonoBypassFix*, numSlots> monoFix {};
     juce::Array<NodeID> monoFixNodes;
+
+    /** In fondo alla catena (prima dell'uscita, le code restano fuori): quando cambia l'ordine
+        dei plugin, rewire() abbassa la catena, scambia il grafo e la rialza. Niente scatti. */
+    struct ChainFader;
+    ChainFader* chainFader = nullptr;
+    NodeID chainFaderNode;
+    juce::Array<NodeID> lastChain;   // i nodi della catena all'ultimo rewire()
+    bool fadeOutChain();
     void enableAllMidiInputs();
     static void configureBusLayout (juce::AudioPluginInstance&);
     std::unique_ptr<juce::AudioPluginInstance> createInstance (const juce::PluginDescription&, juce::String& error,

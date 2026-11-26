@@ -103,6 +103,90 @@ struct Engine::MonoBypassFix final : public AudioProcessor
     void setStateInformation (const void*, int) override         {}
 };
 
+//==============================================================================
+namespace
+{
+    constexpr double chainFadeOutMs = 8.0, chainFadeInMs = 30.0;
+    constexpr int chainSilentBlocks = 2;   // dopo graph.rebuild(): il thread audio passa alla catena nuova al blocco dopo
+}
+
+struct Engine::ChainFader final : public AudioProcessor
+{
+    ChainFader() : AudioProcessor (BusesProperties().withInput  ("In",  AudioChannelSet::stereo(), true)
+                                                     .withOutput ("Out", AudioChannelSet::stereo(), true)) {}
+
+    /** Thread dell'interfaccia: abbassa; isSilent() dice quando è arrivato a zero. */
+    void fadeOut()
+    {
+        silent = false;
+        wantOut = true;
+    }
+
+    /** Thread dell'interfaccia, dopo lo scambio: resta muto per qualche blocco, poi rialza. */
+    void fadeIn()
+    {
+        silentBlocks = chainSilentBlocks;
+        wantOut = false;
+    }
+
+    bool isSilent() const   { return silent.load(); }
+
+    void prepareToPlay (double sr, int) override
+    {
+        outStep = (float) (1.0 / jmax (1.0, sr * chainFadeOutMs / 1000.0));
+        inStep  = (float) (1.0 / jmax (1.0, sr * chainFadeInMs  / 1000.0));
+    }
+
+    void processBlock (AudioBuffer<float>& buffer, MidiBuffer&) override
+    {
+        const int n = buffer.getNumSamples();
+        float target = 1.0f;
+
+        if (wantOut.load())
+            target = 0.0f;
+        else if (silentBlocks.load() > 0)
+        {
+            --silentBlocks;
+            target = 0.0f;
+        }
+
+        const float start = gain;
+
+        if (target < gain)  gain = jmax (0.0f, gain - outStep * (float) n);
+        else                gain = jmin (1.0f, gain + inStep  * (float) n);
+
+        if (exactlyEqual (start, 1.0f) && exactlyEqual (gain, 1.0f))
+            return;
+
+        if (exactlyEqual (start, 0.0f) && exactlyEqual (gain, 0.0f))
+            buffer.clear();
+        else
+            buffer.applyGainRamp (0, n, start, gain);
+
+        silent = wantOut.load() && exactlyEqual (gain, 0.0f);
+    }
+
+    const String getName() const override                        { return "Chain fader"; }
+    void releaseResources() override                             {}
+    double getTailLengthSeconds() const override                 { return 0.0; }
+    bool acceptsMidi() const override                            { return false; }
+    bool producesMidi() const override                           { return false; }
+    AudioProcessorEditor* createEditor() override                { return nullptr; }
+    bool hasEditor() const override                              { return false; }
+    int getNumPrograms() override                                { return 1; }
+    int getCurrentProgram() override                             { return 0; }
+    void setCurrentProgram (int) override                        {}
+    const String getProgramName (int) override                   { return {}; }
+    void changeProgramName (int, const String&) override         {}
+    void getStateInformation (MemoryBlock&) override             {}
+    void setStateInformation (const void*, int) override         {}
+
+private:
+    std::atomic<bool> wantOut { false }, silent { false };
+    std::atomic<int> silentBlocks { 0 };
+    float gain = 1.0f, outStep = 0.01f, inStep = 0.001f;   // solo thread audio (dopo prepareToPlay)
+};
+
 Engine::Engine()
 {
     PropertiesFile::Options options;
@@ -136,6 +220,10 @@ Engine::Engine()
     auto tunerProcessor = std::make_unique<TunerProcessor>();
     tuner = tunerProcessor.get();
     tunerNode = graph.addNode (std::move (tunerProcessor))->nodeID;
+
+    auto fader = std::make_unique<ChainFader>();
+    chainFader = fader.get();
+    chainFaderNode = graph.addNode (std::move (fader))->nodeID;
 
     graph.setPlayHead (&playHead);   // i nodi ricevono questo tempo (vedi TempoPlayHead)
     player.setProcessor (&graph);
@@ -529,8 +617,43 @@ String Engine::getAudioSetupKey() const
          + "|" + String (device->getActiveOutputChannels().countNumberOfSetBits());
 }
 
+bool Engine::fadeOutChain()
+{
+    auto* device = deviceManager.getCurrentAudioDevice();
+
+    if (device == nullptr || ! device->isPlaying() || chainFader == nullptr)
+        return false;
+
+    const double blockMs = 1000.0 * device->getCurrentBufferSizeSamples() / jmax (1.0, device->getCurrentSampleRate());
+    const auto deadline = Time::getMillisecondCounterHiRes() + chainFadeOutMs + 4.0 * blockMs + 20.0;
+
+    chainFader->fadeOut();
+
+    // pochi millisecondi: il thread audio abbassa la catena vecchia mentre questo aspetta
+    while (! chainFader->isSilent())
+    {
+        if (Time::getMillisecondCounterHiRes() > deadline)
+            return true;   // la scheda non chiama più il callback: si va avanti comunque
+
+        Thread::sleep (1);
+    }
+
+    return true;
+}
+
 void Engine::rewire()
 {
+    Array<NodeID> chain;
+    for (const auto& s : slots)
+        if (s.node.has_value())
+            chain.add (*s.node);
+
+    // cambia l'ordine o l'insieme dei plugin: abbassa prima dello scambio, così non scatta
+    const auto startMs = Time::getMillisecondCounterHiRes();
+    const bool faded = chain != lastChain && fadeOutChain();
+    const auto silentAtMs = Time::getMillisecondCounterHiRes();
+    lastChain = chain;
+
     for (const auto& c : graph.getConnections())
         graph.removeConnection (c, UpdateKind::none);
 
@@ -582,7 +705,8 @@ void Engine::rewire()
         }
     }
 
-    connectNodes (previous, outputNode, 2);   // solo le uscite 1-2 della scheda
+    connectNodes (previous, chainFaderNode, 2);
+    connectNodes (chainFaderNode, outputNode, 2);   // solo le uscite 1-2 della scheda
 
     // code del preset precedente: plugin (senza ingresso) -> sfumatura -> uscita, sommate alla catena
     for (const auto& tail : tails)
@@ -592,7 +716,15 @@ void Engine::rewire()
     }
 
     updateBypassStates();
-    graph.rebuild();
+    graph.rebuild();   // prepara i plugin nuovi (prepareToPlay) e consegna la catena al thread audio
+
+    if (faded)
+    {
+        chainFader->fadeIn();
+        const auto endMs = Time::getMillisecondCounterHiRes();
+        PluginScanner::log ("FADE fade-out " + String (silentAtMs - startMs, 1) + " ms, rebuild "
+                            + String (endMs - silentAtMs, 1) + " ms");
+    }
 }
 
 void Engine::updateBypassStates()
