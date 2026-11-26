@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(ChainRig VERSION 0.2.0)
+project(ChainRig VERSION 0.2.1)
 
 # Windows: runtime C++ statico, così sul computer di destinazione non serve installare il Visual C++ Redistributable
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")

@@ -132,6 +132,10 @@ Bluetooth: controllers sold with their own USB dongle work out of the box. For n
 - `Source/MainComponent.*`: the touch UI (preset selector, slots, footswitches, meter, tuner overlay, plugin windows).
 - `Source/Main.cpp`: application, main window and the scanner child process entry point.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 ChainRig is free software, released under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
