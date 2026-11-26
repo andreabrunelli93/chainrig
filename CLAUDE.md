@@ -53,9 +53,7 @@ Nella catena l'utente userà: catture NAM A2 (plugin TONE3000 o NAM), IR, Valhal
 - JUCE viene scaricato con FetchContent (tag 9.0.6). Con `-DJUCE_PATH=...` puoi usare una copia locale.
 
 ## Stato
-La versione 0.1 compila senza warning ed è stata provata su Linux in un container. Lì hanno funzionato caricamento dei plugin, bypass, pulsanti,
-scambio dei posti e salvataggio/caricamento dei preset, usando l'AudioPluginExample di JUCE. Non è stata ancora provata con audio
-reale, né su Mac, né su Windows.
+La versione 0.1 compila senza warning. Il 25-26/11/2026 è stata provata sul Mac con audio reale: Clarett 2Pre USB, buffer 128 e 256, TONE3000 (catture NAM), ValhallaDelay, VintageVerb, Crystalline. Funzionano catena, bypass, nome e tipo dei posti, REC, misuratore, preset e BPM. Su Windows/Surface non è ancora stata provata.
 
 ## Limiti noti e idee per dopo
 - Diagnostica audio: `Recorder` misura quanto dura ogni blocco rispetto al tempo disponibile. `Engine::checkAudioHealth` (ogni 500 ms) mette nella barra di stato "picco %" e "xrun" e scrive gli eventi in `scan.log` (righe AUDIO). Il 25/11/2026 sul Mac, con buffer 128 a 44,1 kHz, BABY Audio Crystalline da solo dava circa 18 blocchi al minuto oltre il tempo (fino al 209%). La catena vuota e i singoli TONE3000 e ValhallaDelay ne davano 0. CoreAudio non conta questi casi come xrun.
