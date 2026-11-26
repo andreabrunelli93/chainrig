@@ -512,7 +512,7 @@ void NamProcessor::setStateInformation (const void* data, int size)
 namespace
 {
     /** Riquadro con titolo, come le card dell'interfaccia principale. */
-    void drawCard (Graphics& g, Rectangle<int> r, const String& title)
+    void drawCard (Graphics& g, juce::Rectangle<int> r, const String& title)
     {
         g.setColour (Palette::card);
         g.fillRoundedRectangle (r.toFloat(), 10.0f);
@@ -659,7 +659,7 @@ public:
         area.removeFromTop (12);
         levelCard = area;
 
-        const auto placeButtons = [] (Rectangle<int> card, Component& load, Component& clear, Component* toggleA, Component* toggleB)
+        const auto placeButtons = [] (juce::Rectangle<int> card, Component& load, Component& clear, Component* toggleA, Component* toggleB)
         {
             auto r = card.reduced (18, 14);
             r.removeFromTop (20);
@@ -782,7 +782,7 @@ private:
 
     NamProcessor& nam;
     std::unique_ptr<FileChooser> chooser;
-    Rectangle<int> modelCard, irCard, levelCard;
+    juce::Rectangle<int> modelCard, irCard, levelCard;
 
     TextButton loadModelButton { "LOAD CAPTURE..." }, loadIrButton { "LOAD IR..." };
     StageButton clearModelButton { "", Icons::Ui::close }, clearIrButton { "", Icons::Ui::close };
