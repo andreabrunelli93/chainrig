@@ -4,6 +4,8 @@ All notable changes to ChainRig. Versions follow [semantic versioning](https://s
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-26
+
 ### Added
 - Master output volume knob under the output meter (saved in the settings).
 - Tap tempo: **TAP** button in the top bar (shows the BPM) and MIDI CC 87.
