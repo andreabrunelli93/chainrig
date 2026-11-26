@@ -4,6 +4,15 @@ A live-performance host for guitarists: a 10-slot VST3 chain, 4 large touch foot
 a tuner, MIDI foot controller support, presets, an output meter and a built-in recorder.
 Built with JUCE 9 and C++20 for Windows (ASIO) on touch tablets. It also runs on macOS and Linux.
 
+## Download
+
+Get the latest version from the **[Releases page](https://github.com/andreabrunelli93/chainrig/releases/latest)**:
+
+- **Windows** (64-bit): `ChainRig-Windows-x64.zip`. Unzip it and run `ChainRig.exe`. No installer and no extra runtime needed. The app is not code-signed, so Windows SmartScreen may warn you: choose *More info → Run anyway*.
+- **macOS** (Apple Silicon and Intel): `ChainRig-macOS.zip`. Unzip it and move `ChainRig.app` to *Applications*. The app is not notarized, so the first time right-click it and choose *Open*, or run `xattr -dr com.apple.quarantine /Applications/ChainRig.app`.
+
+You also need your own VST3 plugins and, on Windows, your audio interface's ASIO driver.
+
 ## Features
 
 - **10-slot serial chain.** Tap a slot to pick a plugin from your list. The same menu opens the plugin's editor, bypasses, replaces, moves or removes it. Empty slots are skipped.
@@ -38,7 +47,7 @@ cmake --build build --config Release
 
 The executable is `build\ChainRig_artefacts\Release\ChainRig.exe`. It is linked against the static C++ runtime, so no redistributable is needed.
 
-The GitHub Actions workflow in `.github/workflows/build-windows.yml` builds it on every push. Download it from *Actions → latest run → Artifacts → ChainRig-Windows*.
+The GitHub Actions workflow in `.github/workflows/build.yml` builds Windows and macOS on every push (zips under *Actions → run → Artifacts*). Pushing a version tag such as `v0.2.0` also publishes both zips as a GitHub Release.
 
 ### macOS
 

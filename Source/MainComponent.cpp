@@ -1496,6 +1496,7 @@ void MainComponent::showSettingsMenu()
     const bool isFullScreen = Desktop::getInstance().getKioskModeComponent() != nullptr;
 
     PopupMenu menu;
+    menu.addSectionHeader (String ("ChainRig ") + JUCE_APPLICATION_VERSION_STRING);
     menu.addItem (audioSettings, "Audio device...");
     menu.addItem (pluginList, "Choose plugins...");
     menu.addSubMenu ("Guitar input", inputMenu);
