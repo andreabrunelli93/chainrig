@@ -262,6 +262,51 @@ void StageLookAndFeel::drawButtonBackground (Graphics& g, Button& button, const 
     }
 }
 
+void StageLookAndFeel::drawRotarySlider (Graphics& g, int x, int y, int width, int height, float sliderPos,
+                                         float startAngle, float endAngle, Slider& slider)
+{
+    const auto bounds = Rectangle<float> ((float) x, (float) y, (float) width, (float) height).reduced (4.0f);
+    const float size = jmin (bounds.getWidth(), bounds.getHeight());
+    const auto box = bounds.withSizeKeepingCentre (size, size);
+    const auto centre = box.getCentre();
+    const float radius = size * 0.5f;
+    const float angle = startAngle + sliderPos * (endAngle - startAngle);
+
+    // anello di fondo
+    Path track;
+    track.addCentredArc (centre.x, centre.y, radius - 3.0f, radius - 3.0f, 0.0f, startAngle, endAngle, true);
+    g.setColour (Palette::off);
+    g.strokePath (track, PathStrokeType (4.0f, PathStrokeType::curved, PathStrokeType::rounded));
+
+    // arco del valore, dal centro (0 dB) se lo slider è simmetrico
+    const bool bipolar = slider.getMinimum() < 0.0 && slider.getMaximum() > 0.0;
+    const float zeroPos = bipolar ? (float) slider.valueToProportionOfLength (0.0) : 0.0f;
+    const float zeroAngle = startAngle + zeroPos * (endAngle - startAngle);
+
+    if (std::abs (angle - zeroAngle) > 0.01f)
+    {
+        Path value;
+        value.addCentredArc (centre.x, centre.y, radius - 3.0f, radius - 3.0f, 0.0f,
+                             jmin (zeroAngle, angle), jmax (zeroAngle, angle), true);
+        g.setColour (slider.isEnabled() ? Palette::accent : Palette::textFaint);
+        g.strokePath (value, PathStrokeType (4.0f, PathStrokeType::curved, PathStrokeType::rounded));
+    }
+
+    // corpo della manopola e indicatore
+    const auto knob = box.reduced (10.0f);
+    g.setGradientFill (ColourGradient (Palette::panelLight, knob.getX(), knob.getY(),
+                                       Palette::cardOff, knob.getX(), knob.getBottom(), false));
+    g.fillEllipse (knob);
+    g.setColour (Palette::borderLight);
+    g.drawEllipse (knob, 1.0f);
+
+    const float r1 = knob.getWidth() * 0.18f, r2 = knob.getWidth() * 0.42f;
+    const Point<float> a (centre.x + r1 * std::sin (angle), centre.y - r1 * std::cos (angle));
+    const Point<float> b (centre.x + r2 * std::sin (angle), centre.y - r2 * std::cos (angle));
+    g.setColour (Palette::text);
+    g.drawLine ({ a, b }, 3.0f);
+}
+
 //==============================================================================
 StageButton::StageButton (const String& text, std::optional<Icons::Ui> i, Style s)
     : Button (text), label (text), icon (i), style (s)
@@ -282,7 +327,7 @@ void StageButton::paintButton (Graphics& g, bool isMouseOver, bool isDown)
 {
     auto bounds = getLocalBounds().toFloat().reduced (0.5f);
     const bool on = getToggleState();
-    const bool recording = (style == Style::record && on);
+    const bool recording = ((style == Style::record || style == Style::danger) && on);
 
     Colour bg = Palette::panel, border = Palette::border, fg = Palette::text;
 

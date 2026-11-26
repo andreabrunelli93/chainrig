@@ -60,6 +60,8 @@ public:
                                     int& idealWidth, int& idealHeight) override;
     void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour& backgroundColour,
                                bool isMouseOverButton, bool isButtonDown) override;
+    void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height, float sliderPos,
+                           float startAngle, float endAngle, juce::Slider&) override;
 };
 
 //==============================================================================
@@ -67,7 +69,7 @@ public:
 class StageButton final : public juce::Button
 {
 public:
-    enum class Style { normal, record };
+    enum class Style { normal, record, danger };   // danger: rosso quando è attivo (es. MUTE)
 
     StageButton (const juce::String& label, std::optional<Icons::Ui> icon = std::nullopt, Style style = Style::normal);
 

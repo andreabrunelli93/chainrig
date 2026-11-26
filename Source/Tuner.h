@@ -6,9 +6,10 @@
 #include <vector>
 
 //==============================================================================
-/** Primo nodo della catena: lascia passare l'audio, ne copia una parte per
-    l'accordatore e, quando l'accordatore è attivo, ammutolisce l'uscita
-    con una rampa (niente click).
+/** Primo nodo della catena (stadio d'ingresso): applica il gain d'ingresso,
+    misura il livello per la barra a sinistra, ne copia una parte per
+    l'accordatore e, con l'accordatore aperto o il MUTE d'ingresso, ammutolisce
+    l'uscita con una rampa (niente click).
 
     Il thread audio scrive solo in una FIFO lock-free; l'analisi del pitch
     avviene nel thread dell'interfaccia. */
@@ -23,6 +24,12 @@ public:
 
     std::atomic<bool> muted { false };      // uscita silenziata (accordatore aperto)
     std::atomic<bool> capturing { false };  // copia i campioni per l'analisi
+    std::atomic<float> inputGainDb { 0.0f };
+    std::atomic<bool> inputMuted { false }; // MUTE d'ingresso: le code di delay e riverbero continuano
+
+    /** Thread dell'interfaccia: picco d'ingresso (dopo il gain, prima del mute) dall'ultima lettura. */
+    float takeInputPeak()                   { return inputPeak.exchange (0.0f); }
+    bool takeInputClipped()                 { return inputClipped.exchange (false); }
 
     double getSampleRateForAnalysis() const noexcept { return currentRate.load(); }
 
@@ -52,6 +59,23 @@ public:
     {
         const int n = buffer.getNumSamples();
 
+        // gain d'ingresso, con rampa quando cambia
+        const float gainTarget = juce::Decibels::decibelsToGain (inputGainDb.load (std::memory_order_relaxed));
+        if (! juce::exactlyEqual (gainTarget, lastInputGain) || ! juce::exactlyEqual (gainTarget, 1.0f))
+            buffer.applyGainRamp (0, n, lastInputGain, gainTarget);
+        lastInputGain = gainTarget;
+
+        // livello per la barra d'ingresso (l'ingresso è mono, copiato su entrambi i canali)
+        if (buffer.getNumChannels() > 0)
+        {
+            const auto r = buffer.findMinMax (0, 0, n);
+            const float peak = juce::jmax (-r.getStart(), r.getEnd());
+            float current = inputPeak.load();
+            while (peak > current && ! inputPeak.compare_exchange_weak (current, peak)) {}
+            if (peak >= 1.0f)
+                inputClipped = true;
+        }
+
         if (capturing.load (std::memory_order_relaxed) && buffer.getNumChannels() > 0)
         {
             int s1, n1, s2, n2;
@@ -62,7 +86,7 @@ public:
             fifo.finishedWrite (n1 + n2);
         }
 
-        const float target = muted.load (std::memory_order_relaxed) ? 0.0f : 1.0f;
+        const float target = (muted.load (std::memory_order_relaxed) || inputMuted.load (std::memory_order_relaxed)) ? 0.0f : 1.0f;
         if (! juce::exactlyEqual (target, lastGain) || juce::exactlyEqual (target, 0.0f))
             buffer.applyGainRamp (0, n, lastGain, target);
         lastGain = target;
@@ -86,7 +110,9 @@ private:
     juce::AbstractFifo fifo { fifoSize };
     std::vector<float> fifoData = std::vector<float> ((size_t) fifoSize, 0.0f);
     std::atomic<double> currentRate { 48000.0 };
-    float lastGain = 1.0f;
+    float lastGain = 1.0f, lastInputGain = 1.0f;
+    std::atomic<float> inputPeak { 0.0f };
+    std::atomic<bool> inputClipped { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TunerProcessor)
 };

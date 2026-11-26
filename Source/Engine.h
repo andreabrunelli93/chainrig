@@ -125,6 +125,12 @@ public:
     //==============================================================================
     // Varie
     int getInputChannel() const                   { return inputChannel; }
+
+    // Stadio d'ingresso: gain (salvato nelle impostazioni, non nel preset) e MUTE
+    float getInputGainDb() const                  { return tuner->inputGainDb.load(); }
+    void setInputGainDb (float db);
+    bool isInputMuted() const                     { return tuner->inputMuted.load(); }
+    void setInputMuted (bool);
     void setInputChannel (int channelIndex);
     int getNumDeviceInputs() const;
     juce::String getStatusText() const;

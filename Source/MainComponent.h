@@ -91,6 +91,29 @@ private:
 };
 
 //==============================================================================
+/** Barra a sinistra: livello d'ingresso (dopo il gain) con spia CLIP, manopola del gain e MUTE. */
+class InputStrip final : public juce::Component, private juce::Timer
+{
+public:
+    explicit InputStrip (Engine&);
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;   // tocco sulla barra: azzera CLIP e picco
+    void refresh();
+
+private:
+    void timerCallback() override;
+
+    Engine& engine;
+    juce::Slider gainKnob { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox };
+    StageButton muteButton { "MUTE", std::nullopt, StageButton::Style::danger };
+    juce::Rectangle<float> meterArea, valueArea, gainTextArea;
+    float level = 0.0f, hold = 0.0f, maxPeak = 0.0f;
+    juce::uint32 holdTime = 0;
+    bool clipLatched = false;
+};
+
+//==============================================================================
 class TunerOverlay final : public juce::Component, private juce::Timer
 {
 public:
@@ -190,6 +213,7 @@ private:
     juce::OwnedArray<BigButton> bigButtons;
     TunerOverlay tunerOverlay { engine };
     OutputMeter outputMeter { engine };
+    InputStrip inputStrip { engine };
 
     std::map<juce::AudioProcessor*, std::unique_ptr<PluginWindow>> pluginWindows;
     std::unique_ptr<juce::AlertWindow> textInput;

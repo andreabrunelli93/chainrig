@@ -18,7 +18,8 @@ The interface text is in Italian.
 - **Tempo (BPM).** Each preset sends a tempo to the plugins, so tempo-synced delays and reverbs behave. Set it from the preset menu: **Tempo: 120 BPM...**.
 - **Plugin chooser.** Tick only the plugins you use live. The others are never loaded, which matters if you have hundreds of plugins installed.
 - **Crash-safe plugin scan.** Each plugin is scanned in a separate process. If one hangs for more than 30 s or crashes, it is excluded and ChainRig carries on.
-- **Output meter** with peak hold and a latching **CLIP** light. Tap the meter to reset it.
+- **Input strip** (left): input level after gain, with a latching **CLIP** light, an input **gain** knob (-24 to +24 dB, double-tap for 0 dB, saved in the settings) and an input **MUTE**. Muting the input lets delay and reverb tails ring out.
+- **Output meter** (right) with peak hold and a latching **CLIP** light. Tap either meter to reset it.
 - **Recorder.** **REC** writes the output (channels 1-2, i.e. the whole chain) to a 24-bit stereo WAV file in your Downloads folder.
 - **Low latency.** ASIO on Windows, Core Audio on macOS. The top bar shows the estimated latency, the CPU load, the peak load of a single audio block and the xrun count.
 

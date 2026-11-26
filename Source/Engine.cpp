@@ -47,6 +47,7 @@ Engine::Engine()
 
     graph.setPlayHead (&playHead);   // i nodi ricevono questo tempo (vedi TempoPlayHead)
     player.setProcessor (&graph);
+    tuner->inputGainDb = (float) props().getDoubleValue ("inputGainDb", 0.0);
 
     // Scheda audio: ripristina l'ultima configurazione, altrimenti preferisci ASIO
     auto savedDevice = props().getXmlValue ("audioDevice");
@@ -786,6 +787,19 @@ void Engine::setInputChannel (int channelIndex)
     recorder.setInputChannel (inputChannel);
     props().setValue ("inputChannel", inputChannel);
     rewire();
+    sendChangeMessage();
+}
+
+void Engine::setInputGainDb (float db)
+{
+    tuner->inputGainDb = jlimit (-24.0f, 24.0f, db);
+    props().setValue ("inputGainDb", (double) tuner->inputGainDb.load());
+    sendChangeMessage();
+}
+
+void Engine::setInputMuted (bool shouldMute)
+{
+    tuner->inputMuted = shouldMute;
     sendChangeMessage();
 }
 

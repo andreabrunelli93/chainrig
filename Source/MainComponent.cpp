@@ -740,6 +740,151 @@ void OutputMeter::paint (Graphics& g)
 }
 
 //==============================================================================
+InputStrip::InputStrip (Engine& e) : engine (e)
+{
+    gainKnob.setRange (-24.0, 24.0, 0.5);
+    gainKnob.setDoubleClickReturnValue (true, 0.0);
+    gainKnob.setMouseDragSensitivity (300);
+    gainKnob.setTitle ("Gain d'ingresso");
+    gainKnob.onValueChange = [this]
+    {
+        engine.setInputGainDb ((float) gainKnob.getValue());
+        repaint();
+    };
+    addAndMakeVisible (gainKnob);
+
+    muteButton.setTitle ("Mute d'ingresso");
+    muteButton.onClick = [this] { engine.setInputMuted (! engine.isInputMuted()); };
+    addAndMakeVisible (muteButton);
+
+    refresh();
+    startTimerHz (30);
+}
+
+void InputStrip::refresh()
+{
+    gainKnob.setValue (engine.getInputGainDb(), dontSendNotification);
+    muteButton.setToggleState (engine.isInputMuted(), dontSendNotification);
+    repaint();
+}
+
+void InputStrip::resized()
+{
+    auto area = getLocalBounds().toFloat().reduced (10.0f, 12.0f);
+
+    muteButton.setBounds (area.removeFromBottom (48.0f).toNearestInt());
+    area.removeFromBottom (8.0f);
+    gainTextArea = area.removeFromBottom (18.0f);
+    gainKnob.setBounds (area.removeFromBottom (64.0f).toNearestInt());
+    area.removeFromBottom (10.0f);
+    valueArea = area.removeFromBottom (40.0f);
+    area.removeFromBottom (6.0f);
+    meterArea = area;
+}
+
+void InputStrip::timerCallback()
+{
+    auto& tuner = engine.getTuner();
+    const float peak = tuner.takeInputPeak();
+    const auto now = Time::getMillisecondCounter();
+
+    level = jmax (peak, level * 0.86f);
+
+    if (peak >= hold)          { hold = peak; holdTime = now + 1500; }
+    else if (now > holdTime)   { hold *= 0.9f; }
+
+    maxPeak = jmax (maxPeak, peak);
+
+    if (tuner.takeInputClipped())
+        clipLatched = true;
+
+    repaint (meterArea.getSmallestIntegerContainer().expanded (2));
+    repaint (valueArea.getSmallestIntegerContainer());
+}
+
+void InputStrip::mouseDown (const MouseEvent&)
+{
+    clipLatched = false;
+    maxPeak = 0.0f;
+    repaint();
+}
+
+void InputStrip::paint (Graphics& g)
+{
+    auto bounds = getLocalBounds().toFloat().reduced (0.5f);
+    g.setColour (Palette::cardOff);
+    g.fillRoundedRectangle (bounds, 16.0f);
+    g.setColour (Palette::border);
+    g.drawRoundedRectangle (bounds, 16.0f, 1.0f);
+
+    auto area = meterArea;
+    const bool muted = engine.isInputMuted();
+
+    // spia CLIP
+    auto clipBox = area.removeFromTop (36.0f);
+    g.setColour (clipLatched ? Palette::danger : Colour (0xff1a1c20));
+    g.fillRoundedRectangle (clipBox, 8.0f);
+    if (! clipLatched)
+    {
+        g.setColour (Palette::off);
+        g.drawRoundedRectangle (clipBox.reduced (0.5f), 8.0f, 1.0f);
+    }
+    g.setColour (clipLatched ? Colours::white : Palette::textDim);
+    g.setFont (Fonts::display (11.0f));
+    g.drawText ("CLIP", clipBox, Justification::centred);
+    area.removeFromTop (10.0f);
+
+    // barra unica (l'ingresso è mono) a destra, scala a sinistra
+    auto bar = area.removeFromRight (20.0f);
+    area.removeFromRight (6.0f);
+
+    g.setFont (Fonts::mono (10.0f));
+    g.setColour (Palette::textFaint);
+    for (float db : { 0.0f, -6.0f, -12.0f, -24.0f, -36.0f, -48.0f })
+    {
+        const float y = bar.getBottom() - dbToMeter (db) * bar.getHeight();
+        g.drawText (String ((int) db), Rectangle<float> (area.getWidth(), 12.0f).withPosition (area.getX(), y - 6.0f),
+                    Justification::centredRight);
+    }
+
+    g.setColour (Colour (0xff08090a));
+    g.fillRoundedRectangle (bar, 3.0f);
+
+    const float h = gainToMeter (level) * bar.getHeight();
+    ColourGradient gradient (Palette::danger, bar.getX(), bar.getY(), Palette::on, bar.getX(), bar.getBottom(), false);
+    gradient.addColour (1.0 - dbToMeter (-3.0f),  Colour (0xfff2c14e));
+    gradient.addColour (1.0 - dbToMeter (-12.0f), Palette::on);
+    g.setGradientFill (gradient);
+    g.setOpacity (muted ? 0.35f : 1.0f);
+    g.fillRoundedRectangle (bar.withTop (bar.getBottom() - h), 3.0f);
+    g.setOpacity (1.0f);
+
+    if (hold > 0.0f)
+    {
+        const float y = bar.getBottom() - gainToMeter (hold) * bar.getHeight();
+        g.setColour (hold >= 1.0f ? Palette::danger : Palette::text);
+        g.fillRect (bar.getX(), y - 1.0f, bar.getWidth(), 2.0f);
+    }
+
+    // picco massimo
+    auto value = valueArea;
+    const float maxDb = Decibels::gainToDecibels (maxPeak, -100.0f);
+    g.setColour (maxDb >= 0.0f ? Palette::danger : (maxDb > -6.0f ? Palette::accent : Palette::text));
+    g.setFont (Fonts::mono (15.0f));
+    g.drawText (maxPeak > 0.0f ? String (maxDb, 1).replace (".", ",") : String ("-inf"),
+                value.removeFromTop (22.0f), Justification::centred);
+    g.setColour (Palette::textFaint);
+    g.setFont (Fonts::display (9.0f));
+    g.drawText ("INGRESSO dB", value, Justification::centred);
+
+    // valore del gain sotto la manopola
+    const float gainDb = engine.getInputGainDb();
+    g.setColour (exactlyEqual (gainDb, 0.0f) ? Palette::textDim : Palette::accent);
+    g.setFont (Fonts::mono (12.0f));
+    g.drawText ((gainDb > 0.0f ? "+" : "") + String (gainDb, 1).replace (".", ",") + " dB", gainTextArea, Justification::centred);
+}
+
+//==============================================================================
 MainComponent::MainComponent (Engine& e) : engine (e)
 {
     LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
@@ -765,6 +910,7 @@ MainComponent::MainComponent (Engine& e) : engine (e)
         addAndMakeVisible (bigButtons.add (new BigButton (*this, i)));
 
     addAndMakeVisible (outputMeter);
+    addAndMakeVisible (inputStrip);
     addChildComponent (tunerOverlay);
 
     engine.onProcessorAboutToBeDeleted = [this] (AudioProcessor* p) { pluginWindows.erase (p); };
@@ -848,9 +994,11 @@ void MainComponent::resized()
 
     area.removeFromBottom (20);
 
-    // misuratore d'uscita a destra
+    // misuratore d'uscita a destra, ingresso (gain e MUTE) a sinistra
     outputMeter.setBounds (area.removeFromRight (84));
     area.removeFromRight (20);
+    inputStrip.setBounds (area.removeFromLeft (84));
+    area.removeFromLeft (20);
 
     // catena: intestazione e due righe da cinque
     chainHeader = area.removeFromTop (22);
@@ -957,6 +1105,7 @@ void MainComponent::refresh()
 
     for (auto* s : slotViews)  s->repaint();
     for (auto* b : bigButtons) b->repaint();
+    inputStrip.refresh();
     repaint();
 }
 
