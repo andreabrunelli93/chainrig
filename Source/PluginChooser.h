@@ -4,7 +4,7 @@
 #include <atomic>
 
 //==============================================================================
-/** Finestra "Scegli plugin": elenca i file VST3 delle cartelle dei plugin con una
+/** Finestra "Choose plugin": elenca i file VST3 delle cartelle dei plugin con una
     casella ciascuno. Con "Applica" vengono esaminati (fuori processo) solo quelli
     spuntati e tolti dalla lista quelli non spuntati. Così i plugin che non servono
     dal vivo non vengono mai aperti. */
@@ -56,7 +56,7 @@ private:
     juce::Label title, summary;
     juce::TextEditor filter;
     juce::ListBox listBox { {}, this };
-    juce::TextButton applyButton { "APPLICA" }, advancedButton { "Avanzate..." }, noneButton { "Nessuno" };
+    juce::TextButton applyButton { "APPLY" }, advancedButton { "Advanced..." }, noneButton { "None" };
 
     // Stato della ricerca, letto dal Timer sul thread dell'interfaccia
     juce::StringArray filesToScan;

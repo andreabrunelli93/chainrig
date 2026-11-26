@@ -5,9 +5,9 @@ using namespace juce;
 
 //==============================================================================
 PluginChooser::PluginChooser (Engine& e, std::function<void()> advanced)
-    : Thread ("Ricerca plugin scelti"), engine (e), showAdvancedList (std::move (advanced))
+    : Thread ("Scan chosen plugins"), engine (e), showAdvancedList (std::move (advanced))
 {
-    title.setText ("Scegli i plugin per il palco", dontSendNotification);
+    title.setText ("Choose your stage plugins", dontSendNotification);
     title.setFont (Fonts::display (28.0f));
     title.setColour (Label::textColourId, Palette::text);
     addAndMakeVisible (title);
@@ -18,7 +18,7 @@ PluginChooser::PluginChooser (Engine& e, std::function<void()> advanced)
 
     filter.setFont (Fonts::text (20.0f));
     filter.setIndents (16, 14);
-    filter.setTextToShowWhenEmpty ("Filtra per nome (es. reverb, amp)", Palette::textFaint);
+    filter.setTextToShowWhenEmpty ("Filter by name (e.g. reverb, amp)", Palette::textFaint);
     filter.setColour (TextEditor::backgroundColourId, Palette::background);
     filter.setColour (TextEditor::textColourId, Palette::text);
     filter.setColour (TextEditor::outlineColourId, Palette::borderLight);
@@ -138,8 +138,8 @@ void PluginChooser::updateSummary()
     for (auto& entry : entries)
         chosen += entry.chosen ? 1 : 0;
 
-    summary.setText (String (chosen) + " spuntati su " + String (entries.size())
-                         + " file VST3. Premi APPLICA per aggiornare la lista.",
+    summary.setText (String (chosen) + " ticked out of " + String (entries.size())
+                         + " VST3 files. Press APPLY to update the list.",
                      dontSendNotification);
 }
 
@@ -193,17 +193,17 @@ void PluginChooser::paintListBoxItem (int row, Graphics& g, int width, int heigh
 
     if (entry.state == State::inList)
     {
-        status = entry.chosen ? "NELLA LISTA" : "DA TOGLIERE";
+        status = entry.chosen ? "IN LIST" : "TO REMOVE";
         statusColour = entry.chosen ? Palette::on : Colour (0xffff8a7a);
     }
     else if (entry.chosen)
     {
-        status = entry.state == State::excluded ? "DA RIPROVARE" : "DA AGGIUNGERE";
+        status = entry.state == State::excluded ? "TO RETRY" : "TO ADD";
         statusColour = Palette::accent;
     }
     else if (entry.state == State::excluded)
     {
-        status = "ESCLUSO: SI BLOCCA O VA IN CRASH";
+        status = "EXCLUDED: HANGS OR CRASHES";
         statusColour = Palette::danger;
     }
 
@@ -302,8 +302,8 @@ void PluginChooser::timerCallback()
             name = scanningName;
         }
 
-        summary.setText ("Esamino " + String (scanIndex.load() + 1) + " di " + String (filesToScan.size())
-                             + ": " + name + "  (al massimo 30 s per plugin)",
+        summary.setText ("Scanning " + String (scanIndex.load() + 1) + " of " + String (filesToScan.size())
+                             + ": " + name + "  (up to 30 s per plugin)",
                          dontSendNotification);
         return;
     }
@@ -329,9 +329,9 @@ void PluginChooser::timerCallback()
 
     listBox.repaint();
 
-    String text = "Fatto: " + String (added) + " aggiunti";
-    if (removedCount > 0) text << ", " << removedCount << " tolti";
-    if (failed > 0)       text << ", " << failed << " non caricati (vedi scan.log)";
+    String text = "Done: " + String (added) + " added";
+    if (removedCount > 0) text << ", " << removedCount << " removed";
+    if (failed > 0)       text << ", " << failed << " failed to load (see scan.log)";
     summary.setText (text + ".", dontSendNotification);
 }
 
@@ -341,7 +341,7 @@ void PluginChooser::setBusy (bool busy)
     advancedButton.setEnabled (! busy);
     filter.setEnabled (! busy);
     noneButton.setEnabled (! busy);
-    applyButton.setButtonText (busy ? "ATTENDI..." : "APPLICA");
+    applyButton.setButtonText (busy ? "WAIT..." : "APPLY");
 }
 
 //==============================================================================

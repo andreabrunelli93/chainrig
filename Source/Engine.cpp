@@ -555,18 +555,18 @@ String Engine::getSlotKindName (SlotKind k)
 {
     switch (k)
     {
-        case SlotKind::automatic:  return "Automatico";
-        case SlotKind::amp:        return "Amplificatore";
-        case SlotKind::ir:         return "Cassa / IR";
-        case SlotKind::drive:      return "Drive / distorsore";
-        case SlotKind::compressor: return "Compressore";
-        case SlotKind::eq:         return "Equalizzatore";
-        case SlotKind::modulation: return "Modulazione";
+        case SlotKind::automatic:  return "Automatic";
+        case SlotKind::amp:        return "Amp";
+        case SlotKind::ir:         return "Cab / IR";
+        case SlotKind::drive:      return "Drive / distortion";
+        case SlotKind::compressor: return "Compressor";
+        case SlotKind::eq:         return "EQ";
+        case SlotKind::modulation: return "Modulation";
         case SlotKind::delay:      return "Delay";
-        case SlotKind::reverb:     return "Riverbero";
+        case SlotKind::reverb:     return "Reverb";
         case SlotKind::fx:         break;
     }
-    return "Altro effetto";
+    return "Other effect";
 }
 
 String Engine::getSlotKindId (SlotKind k)
@@ -838,14 +838,14 @@ int Engine::getNumDeviceInputs() const
 String Engine::getStatusText() const
 {
     if (deviceName.isEmpty())
-        return "Nessuna scheda audio";
+        return "No audio device";
 
     // due righe: scheda e formato; latenza, carico e buchi
-    return deviceName + String::fromUTF8 ("  ·  ") + String (deviceSampleRate / 1000.0, 1).replace (".", ",")
+    return deviceName + String::fromUTF8 ("  ·  ") + String (deviceSampleRate / 1000.0, 1)
          + String::fromUTF8 (" kHz  ·  buffer ") + String (deviceBufferSize)
          + String::fromUTF8 ("  ·  ") + String (roundToInt (getBpm())) + " BPM"
-         + "\nlatenza " + String (deviceLatencyMs, 1).replace (".", ",") + String::fromUTF8 (" ms  ·  CPU ")
-         + String (roundToInt (deviceManager.getCpuUsage() * 100.0)) + String::fromUTF8 ("%  ·  picco ")
+         + "\nlatency " + String (deviceLatencyMs, 1) + String::fromUTF8 (" ms  ·  CPU ")
+         + String (roundToInt (deviceManager.getCpuUsage() * 100.0)) + String::fromUTF8 ("%  ·  peak ")
          + String (roundToInt (recentPeakLoad * 100.0f)) + String::fromUTF8 ("%  ·  xrun ")
          + String (loggedXruns + loggedOverloads);
 }
@@ -867,8 +867,8 @@ void Engine::updateDeviceInfo()
     const int totalLatency = deviceBufferSize * 2 + device->getInputLatencyInSamples() + device->getOutputLatencyInSamples();
     deviceLatencyMs = deviceSampleRate > 0 ? 1000.0 * totalLatency / deviceSampleRate : 0.0;
 
-    PluginScanner::log ("AUDIO  avvio: " + deviceName + ", " + String (deviceSampleRate, 0) + " Hz, buffer "
-                        + String (deviceBufferSize) + ", latenza " + String (deviceLatencyMs, 1) + " ms");
+    PluginScanner::log ("AUDIO  start: " + deviceName + ", " + String (deviceSampleRate, 0) + " Hz, buffer "
+                        + String (deviceBufferSize) + ", latency " + String (deviceLatencyMs, 1) + " ms");
 }
 
 void Engine::checkAudioHealth()
@@ -887,8 +887,8 @@ void Engine::checkAudioHealth()
         const float in = recorder.takeInputPeak(), out = recorder.takeOutputPeak();
         static const bool levelLog = SystemStats::getEnvironmentVariable ("CHAINRIG_LEVEL_LOG", {}) == "1";
         if (levelLog)
-            PluginScanner::log ("LIVELLI  ingresso " + String (Decibels::gainToDecibels (in, -120.0f), 1)
-                                + " dB  uscita " + String (Decibels::gainToDecibels (out, -120.0f), 1) + " dB");
+            PluginScanner::log ("LEVELS  input " + String (Decibels::gainToDecibels (in, -120.0f), 1)
+                                + " dB  output " + String (Decibels::gainToDecibels (out, -120.0f), 1) + " dB");
     }
 
     auto* device = deviceManager.getCurrentAudioDevice();
@@ -898,10 +898,10 @@ void Engine::checkAudioHealth()
 
     if (xruns != loggedXruns || overloads != loggedOverloads || late != loggedLate)
     {
-        PluginScanner::log ("AUDIO  xrun scheda " + String (xruns) + " (+" + String (xruns - loggedXruns) + ")"
-                            + ", catena oltre il tempo " + String (overloads) + " (+" + String (overloads - loggedOverloads) + ")"
-                            + ", blocchi in ritardo " + String (late) + " (+" + String (late - loggedLate) + ")"
-                            + ", carico max " + String (roundToInt (recentPeakLoad * 100.0f)) + "%"
+        PluginScanner::log ("AUDIO  device xruns " + String (xruns) + " (+" + String (xruns - loggedXruns) + ")"
+                            + ", chain over budget " + String (overloads) + " (+" + String (overloads - loggedOverloads) + ")"
+                            + ", late blocks " + String (late) + " (+" + String (late - loggedLate) + ")"
+                            + ", max load " + String (roundToInt (recentPeakLoad * 100.0f)) + "%"
                             + ", CPU " + String (roundToInt (deviceManager.getCpuUsage() * 100.0)) + "%");
         loggedXruns = xruns;
         loggedOverloads = overloads;
@@ -982,9 +982,9 @@ bool Engine::restoreFromRecovery()
     {
         loading.deleteFile();
         recovery.deleteFile();
-        startupMessage = "Il ripristino della sessione precedente ha fatto chiudere ChainRig, quindi questa volta "
-                         "l'ho saltato. Probabilmente un plugin della catena va in crash: controlla l'ultimo preset.";
-        PluginScanner::log ("RECUPERO saltato: il tentativo precedente si era chiuso");
+        startupMessage = "Restoring the previous session made ChainRig close, so it was skipped this time. "
+                         "A plugin in the chain probably crashes: check your last preset.";
+        PluginScanner::log ("RECOVERY skipped: the previous attempt crashed");
         return false;
     }
 
@@ -1003,21 +1003,21 @@ bool Engine::restoreFromRecovery()
     }
 
     String errors;
-    loadPresetState (root, errors, "recupero");
+    loadPresetState (root, errors, "recovery");
     loading.deleteFile();
 
     currentPresetFile = File (root["recoveryOf"].toString());
     markClean();
     dirty = (bool) root["dirty"];
 
-    startupMessage = "ChainRig si era chiuso in modo inatteso. Ho ripristinato la catena com'era alle "
+    startupMessage = "ChainRig closed unexpectedly. The chain was restored as it was at "
                    + savedAt.formatted ("%H:%M:%S") + ".";
     if (dirty)
-        startupMessage << " C'erano modifiche non salvate: le ritrovi, ricordati di salvare.";
+        startupMessage << " There were unsaved changes: they are back, remember to save.";
     if (errors.isNotEmpty())
         startupMessage << "\n\n" << errors;
 
-    PluginScanner::log ("RECUPERO ripristinata la sessione salvata alle " + savedAt.formatted ("%H:%M:%S"));
+    PluginScanner::log ("RECOVERY restored the session saved at " + savedAt.formatted ("%H:%M:%S"));
     return true;
 }
 
@@ -1032,7 +1032,7 @@ Array<File> Engine::getPresetFiles() const
 
 String Engine::getCurrentPresetName() const
 {
-    return currentPresetFile == File() ? String ("(nuovo preset)") : currentPresetFile.getFileNameWithoutExtension();
+    return currentPresetFile == File() ? String ("(new preset)") : currentPresetFile.getFileNameWithoutExtension();
 }
 
 var Engine::createPresetState() const
@@ -1108,7 +1108,7 @@ bool Engine::loadPreset (const File& file, String& errors)
 
     if (! root.isObject())
     {
-        errors = "File preset non valido: " + file.getFileName();
+        errors = "Invalid preset file: " + file.getFileName();
         return false;
     }
 
@@ -1166,7 +1166,7 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
 
             if (auto xml = parseXML (pluginXml); xml == nullptr || ! p.description.loadFromXml (*xml))
             {
-                errors << "Posto " << (i + 1) << ": descrizione plugin illeggibile\n";
+                errors << "Slot " << (i + 1) << ": unreadable plugin description\n";
                 continue;
             }
 
@@ -1202,7 +1202,7 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
 
             if (p.instance == nullptr)
             {
-                errors << "Posto " << (i + 1) << ": impossibile caricare " << p.description.name
+                errors << "Slot " << (i + 1) << ": could not load " << p.description.name
                        << (error.isNotEmpty() ? " (" + error + ")" : String()) << "\n";
                 continue;
             }
@@ -1279,8 +1279,8 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
 
     rewire();
 
-    PluginScanner::log ("PRESET " + nameForLog + ": " + String (numReused) + " plugin riusati, "
-                        + String (numCreated) + " nuovi, " + String (Time::getMillisecondCounterHiRes() - startMs, 0) + " ms");
+    PluginScanner::log ("PRESET " + nameForLog + ": " + String (numReused) + " plugins reused, "
+                        + String (numCreated) + " new, " + String (Time::getMillisecondCounterHiRes() - startMs, 0) + " ms");
     return errors.isEmpty();
 }
 

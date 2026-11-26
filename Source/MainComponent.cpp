@@ -8,18 +8,18 @@ namespace
 {
     String twoDigits (int n)   { return String (n).paddedLeft ('0', 2); }
 
-    /** "posti 01 · 02", "posto 03" oppure "nessun posto". */
+    /** "slots 01 · 02", "slot 03" oppure "no slots". */
     String describeSlots (Array<int> slots)
     {
         if (slots.isEmpty())
-            return "nessun posto";
+            return "no slots";
 
         slots.sort();
         StringArray parts;
         for (auto s : slots)
             parts.add (twoDigits (s + 1));
 
-        return (slots.size() == 1 ? "posto " : "posti ") + parts.joinIntoString (String::fromUTF8 (" · "));
+        return (slots.size() == 1 ? "slot " : "slots ") + parts.joinIntoString (String::fromUTF8 (" · "));
     }
 
     void drawLed (Graphics& g, Rectangle<float> led, bool on, Colour colour)
@@ -59,7 +59,7 @@ void SlotView::paint (Graphics& g)
         g.setFont (Fonts::mono (13.0f));
         g.drawText (number, bounds.reduced (18.0f, 16.0f), Justification::topLeft);
 
-        const String label ("AGGIUNGI");
+        const String label ("ADD");
         const auto font = Fonts::display (13.0f);
         const float textW = GlyphArrangement::getStringWidth (font, label);
         const float x = bounds.getCentreX() - (18.0f + 8.0f + textW) * 0.5f;
@@ -148,9 +148,9 @@ void SlotView::paint (Graphics& g)
     StringArray controllers;
     for (int b = 0; b < Engine::numButtons; ++b)
         if (engine.getButton (b).slots.contains (index))
-            controllers.add ("PEDALE " + String (b + 1));
+            controllers.add ("SWITCH " + String (b + 1));
 
-    String status = bypassed ? "BYPASS" : (active ? "ATTIVO" : "SPENTO");
+    String status = bypassed ? "BYPASS" : (active ? "ON" : "OFF");
     if (! controllers.isEmpty())
         status << String::fromUTF8 ("  ·  ") << controllers.joinIntoString (" + ");
 
@@ -228,8 +228,8 @@ void BigButton::paint (Graphics& g)
 
     String sub;
     if (edit)
-        sub = button.slots.isEmpty() ? "tocca per assegnare i posti"
-                                     : describeSlots (button.slots) + String::fromUTF8 ("  ·  tocca per modificare");
+        sub = button.slots.isEmpty() ? "tap to assign slots"
+                                     : describeSlots (button.slots) + String::fromUTF8 ("  ·  tap to edit");
     else
         sub = describeSlots (button.slots) + String::fromUTF8 ("  ·  CC ") + String (engine.getButtonCC (index));
 
@@ -316,14 +316,14 @@ void PresetSelector::paint (Graphics& g)
     auto topLine = text.removeFromTop (16.0f);
     g.setColour (Palette::textDim);
     g.setFont (Fonts::mono (11.0f));
-    const String position = number > 0 ? "PRESET " + twoDigits (number) + " / " + twoDigits (total) : String ("PRESET NUOVO");
+    const String position = number > 0 ? "PRESET " + twoDigits (number) + " / " + twoDigits (total) : String ("NEW PRESET");
     g.drawText (position, topLine, Justification::centredLeft);
 
     if (unsaved)
     {
         const float x = topLine.getX() + GlyphArrangement::getStringWidth (Fonts::mono (11.0f), position) + 10.0f;
         g.setColour (Palette::accent);
-        g.drawText (String::fromUTF8 ("·  NON SALVATO"), topLine.withLeft (x), Justification::centredLeft);
+        g.drawText (String::fromUTF8 ("·  UNSAVED"), topLine.withLeft (x), Justification::centredLeft);
     }
 
     auto nameArea = text;
@@ -436,10 +436,10 @@ void TunerOverlay::paint (Graphics& g)
     header.removeFromLeft (10.0f);
     g.setColour (Palette::textDim);
     g.setFont (Fonts::display (12.0f));
-    g.drawText ("ACCORDATORE", header.withWidth (200.0f), Justification::centredLeft);
+    g.drawText ("TUNER", header.withWidth (200.0f), Justification::centredLeft);
 
     {
-        const String muted ("USCITA MUTA");
+        const String muted ("OUTPUT MUTED");
         const auto font = Fonts::display (12.0f);
         const float w = GlyphArrangement::getStringWidth (font, muted) + 16.0f + 10.0f + 32.0f;
         auto pill = header.removeFromRight (w).withSizeKeepingCentre (w, 36.0f);
@@ -464,19 +464,18 @@ void TunerOverlay::paint (Graphics& g)
     g.drawRoundedRectangle (closeBox, 14.0f, 1.0f);
     g.setColour (Palette::text);
     g.setFont (Fonts::display (15.0f));
-    g.drawText (String::fromUTF8 ("TOCCA PER CHIUDERE  ·  CC ") + String (engine.getTunerCC()), closeBox, Justification::centred);
+    g.drawText (String::fromUTF8 ("TAP TO CLOSE  ·  CC ") + String (engine.getTunerCC()), closeBox, Justification::centred);
     area.removeFromBottom (24.0f);
 
     if (displayFreq <= 0.0f)
     {
         g.setColour (Palette::textDim);
         g.setFont (Fonts::display (40.0f));
-        g.drawText ("SUONA UNA CORDA", area, Justification::centred);
+        g.drawText ("PLAY A STRING", area, Justification::centred);
         return;
     }
 
     static const char* names[]   = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    static const char* namesIt[] = { "Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si" };
 
     const double midi = 69.0 + 12.0 * std::log2 (displayFreq / 440.0);
     const int nearest = roundToInt (midi);
@@ -513,9 +512,9 @@ void TunerOverlay::paint (Graphics& g)
     block.removeFromTop (18.0f);
     auto info = block.removeFromTop (28.0f);
     {
-        const String left = String (namesIt[noteIndex]) + String::fromUTF8 ("  ·  ") + String (displayFreq, 2).replace (".", ",") + " Hz";
+        const String left = String (displayFreq, 2) + " Hz";
         const String right = (cents >= 0.0f ? String ("+") : String (CharPointer_UTF8 ("\xe2\x88\x92")))
-                                + String (std::abs (cents), 1).replace (".", ",") + " cent";
+                                + String (std::abs (cents), 1) + " cent";
         g.setFont (Fonts::mono (20.0f));
         g.setColour (Palette::textDim);
         g.drawText (left, info.withRight (info.getCentreX() - 16.0f), Justification::centredRight);
@@ -708,11 +707,11 @@ void OutputMeter::paint (Graphics& g)
     const float maxDb = Decibels::gainToDecibels (maxPeak, -100.0f);
     g.setColour (maxDb >= 0.0f ? Palette::danger : (maxDb > -6.0f ? Palette::accent : Palette::text));
     g.setFont (Fonts::mono (15.0f));
-    g.drawText (maxPeak > 0.0f ? String (maxDb, 1).replace (".", ",") : String ("-inf"),
+    g.drawText (maxPeak > 0.0f ? String (maxDb, 1) : String ("-inf"),
                 valueBox.removeFromTop (22.0f), Justification::centred);
     g.setColour (Palette::textFaint);
     g.setFont (Fonts::display (9.0f));
-    g.drawText ("PICCO dB", valueBox, Justification::centred);
+    g.drawText ("PEAK dB", valueBox, Justification::centred);
 
     area.removeFromTop (10.0f);
     area.removeFromBottom (10.0f);
@@ -762,7 +761,7 @@ InputStrip::InputStrip (Engine& e) : engine (e)
     gainKnob.setRange (-24.0, 24.0, 0.5);
     gainKnob.setDoubleClickReturnValue (true, 0.0);
     gainKnob.setMouseDragSensitivity (300);
-    gainKnob.setTitle ("Gain d'ingresso");
+    gainKnob.setTitle ("Input gain");
     gainKnob.onValueChange = [this]
     {
         engine.setInputGainDb ((float) gainKnob.getValue());
@@ -770,7 +769,7 @@ InputStrip::InputStrip (Engine& e) : engine (e)
     };
     addAndMakeVisible (gainKnob);
 
-    muteButton.setTitle ("Mute d'ingresso");
+    muteButton.setTitle ("Input mute");
     muteButton.onClick = [this] { engine.setInputMuted (! engine.isInputMuted()); };
     addAndMakeVisible (muteButton);
 
@@ -888,17 +887,17 @@ void InputStrip::paint (Graphics& g)
     const float maxDb = Decibels::gainToDecibels (maxPeak, -100.0f);
     g.setColour (maxDb >= 0.0f ? Palette::danger : (maxDb > -6.0f ? Palette::accent : Palette::text));
     g.setFont (Fonts::mono (15.0f));
-    g.drawText (maxPeak > 0.0f ? String (maxDb, 1).replace (".", ",") : String ("-inf"),
+    g.drawText (maxPeak > 0.0f ? String (maxDb, 1) : String ("-inf"),
                 value.removeFromTop (22.0f), Justification::centred);
     g.setColour (Palette::textFaint);
     g.setFont (Fonts::display (9.0f));
-    g.drawText ("INGRESSO dB", value, Justification::centred);
+    g.drawText ("INPUT dB", value, Justification::centred);
 
     // valore del gain sotto la manopola
     const float gainDb = engine.getInputGainDb();
     g.setColour (exactlyEqual (gainDb, 0.0f) ? Palette::textDim : Palette::accent);
     g.setFont (Fonts::mono (12.0f));
-    g.drawText ((gainDb > 0.0f ? "+" : "") + String (gainDb, 1).replace (".", ",") + " dB", gainTextArea, Justification::centred);
+    g.drawText ((gainDb > 0.0f ? "+" : "") + String (gainDb, 1) + " dB", gainTextArea, Justification::centred);
 }
 
 //==============================================================================
@@ -917,7 +916,7 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     tunerButton.onClick    = [this] { engine.setTunerActive (! engine.isTunerActive()); };
     editButton.onClick     = [this] { editMode = ! editMode; refresh(); };
     settingsButton.onClick = [this] { showSettingsMenu(); };
-    settingsButton.setTitle ("Impostazioni");
+    settingsButton.setTitle ("Settings");
     recButton.onClick      = [this] { toggleRecording(); };
 
     for (int i = 0; i < Engine::numSlots; ++i)
@@ -946,7 +945,7 @@ MainComponent::MainComponent (Engine& e) : engine (e)
         {
             if (safeThis != nullptr)
                 AlertWindow::showAsync (MessageBoxOptions::makeOptionsOk (MessageBoxIconType::InfoIcon,
-                                                                          "Sessione ripristinata", message),
+                                                                          "Session restored", message),
                                         nullptr);
         });
     }
@@ -981,11 +980,11 @@ void MainComponent::paint (Graphics& g)
     auto header = chainHeader.toFloat().reduced (4.0f, 0.0f);
     g.setColour (Palette::textDim);
     g.setFont (Fonts::display (12.0f));
-    g.drawText ("CATENA DEL SEGNALE", header, Justification::centredLeft);
+    g.drawText ("SIGNAL CHAIN", header, Justification::centredLeft);
 
     g.setFont (Fonts::mono (12.0f));
-    g.drawText (String (active) + " attivi  " + String::fromUTF8 ("·") + "  " + String (bypassed) + " in bypass  " + String::fromUTF8 ("·") + "  "
-                    + String (empty) + " vuoti",
+    g.drawText (String (active) + " on  " + String::fromUTF8 ("·") + "  " + String (bypassed) + " bypassed  " + String::fromUTF8 ("·") + "  "
+                    + String (empty) + " empty",
                 header, Justification::centredRight);
 }
 
@@ -1069,7 +1068,7 @@ void MainComponent::updateStatus()
 {
     if (lastRecording != File() && Time::getMillisecondCounter() < lastRecordingShownUntil)
     {
-        statusDisplay.setLines ("Salvato in Download", lastRecording.getFileName(), true);
+        statusDisplay.setLines ("Saved to Downloads", lastRecording.getFileName(), true);
         return;
     }
 
@@ -1083,13 +1082,13 @@ void MainComponent::toggleRecording()
 
     if (recorder.isRecording())
     {
-        recorder.stop();   // il messaggio "Salvato in Download" lo mostra updateRecButton()
+        recorder.stop();   // il messaggio "Saved to Downloads" lo mostra updateRecButton()
     }
     else
     {
         String error;
         if (! recorder.start (error))
-            showError ("Registrazione", error);
+            showError ("Recording", error);
     }
 
     timerCallback();
@@ -1159,39 +1158,39 @@ void MainComponent::showSlotMenu (int slot)
     enum { openEditor = 1, toggleBypass, renameSlot, moveLeft, moveRight, removePlugin, scanPlugins, kindBase = 200 };
 
     PopupMenu menu;
-    menu.addSectionHeader ("Posto " + String (slot + 1) + (empty ? String() : " - " + engine.getSlotName (slot)));
+    menu.addSectionHeader ("Slot " + String (slot + 1) + (empty ? String() : " - " + engine.getSlotName (slot)));
 
     if (types.isEmpty() && empty)
     {
-        menu.addItem (scanPlugins, "Nessun plugin nella lista: scegli plugin...");
+        menu.addItem (scanPlugins, "No plugins in the list: choose plugins...");
     }
     else if (empty)
     {
-        menu.addSubMenu ("Scegli plugin", pluginMenu);
+        menu.addSubMenu ("Choose plugin", pluginMenu);
     }
     else
     {
-        // Tipo: decide icona ed etichetta. "Automatico" lo ricava dal plugin.
+        // Tipo: decide icona ed etichetta. "Automatic" lo ricava dal plugin.
         PopupMenu kindMenu;
         const auto setting = engine.getSlotKindSetting (slot);
-        kindMenu.addItem (kindBase, "Automatico (" + Engine::getSlotKindName (engine.guessSlotKind (slot)) + ")",
+        kindMenu.addItem (kindBase, "Automatic (" + Engine::getSlotKindName (engine.guessSlotKind (slot)) + ")",
                           true, setting == Engine::SlotKind::automatic);
         kindMenu.addSeparator();
         for (auto k : Engine::allSlotKinds)
             kindMenu.addItem (kindBase + (int) k, Engine::getSlotKindName (k), true, setting == k);
 
-        menu.addItem (openEditor, "Apri interfaccia del plugin");
-        menu.addItem (toggleBypass, engine.getSlotUserBypass (slot) ? "Riattiva" : "Bypass");
+        menu.addItem (openEditor, "Open plugin editor");
+        menu.addItem (toggleBypass, engine.getSlotUserBypass (slot) ? "Enable" : "Bypass");
         menu.addSeparator();
-        menu.addItem (renameSlot, "Rinomina...");
-        menu.addSubMenu ("Tipo: " + Engine::getSlotKindName (engine.getSlotKind (slot)), kindMenu);
+        menu.addItem (renameSlot, "Rename...");
+        menu.addSubMenu ("Type: " + Engine::getSlotKindName (engine.getSlotKind (slot)), kindMenu);
         menu.addSeparator();
         if (! types.isEmpty())
-            menu.addSubMenu ("Sostituisci con", pluginMenu);
-        menu.addItem (moveLeft,  "Sposta indietro", slot > 0);
-        menu.addItem (moveRight, "Sposta avanti",   slot < Engine::numSlots - 1);
+            menu.addSubMenu ("Replace with", pluginMenu);
+        menu.addItem (moveLeft,  "Move left", slot > 0);
+        menu.addItem (moveRight, "Move right",   slot < Engine::numSlots - 1);
         menu.addSeparator();
-        menu.addItem (removePlugin, "Rimuovi");
+        menu.addItem (removePlugin, "Remove");
     }
 
     menu.showMenuAsync (PopupMenu::Options().withTargetComponent (slotViews[slot]),
@@ -1205,7 +1204,7 @@ void MainComponent::showSlotMenu (int slot)
         {
             String error;
             if (! engine.loadPluginIntoSlot (slot, types.getReference (chosen), error))
-                showError ("Impossibile caricare il plugin", types.getReference (chosen).name + "\n\n" + error);
+                showError ("Could not load the plugin", types.getReference (chosen).name + "\n\n" + error);
             return;
         }
 
@@ -1220,7 +1219,7 @@ void MainComponent::showSlotMenu (int slot)
             case openEditor:   openPluginWindow (engine.getSlotProcessor (slot)); break;
             case toggleBypass: engine.setSlotUserBypass (slot, ! engine.getSlotUserBypass (slot)); break;
             case renameSlot:
-                askText ("Nome del posto (lascia vuoto per usare il nome del plugin)", engine.getSlotName (slot),
+                askText ("Slot name (leave empty to use the plugin name)", engine.getSlotName (slot),
                          [this, slot] (String text)
                          {
                              engine.setSlotCustomName (slot, text == engine.getSlotPluginName (slot) ? String() : text);
@@ -1289,7 +1288,7 @@ void MainComponent::paintOverChildren (Graphics& g)
         g.setColour (Palette::accent);
         g.drawRoundedRectangle (r, 18.0f, 3.0f);
 
-        const String hint = engine.isSlotEmpty (dragTarget) ? "SPOSTA QUI" : "INSERISCI QUI";
+        const String hint = engine.isSlotEmpty (dragTarget) ? "MOVE HERE" : "INSERT HERE";
         const auto font = Fonts::display (12.0f);
         const float w = GlyphArrangement::getStringWidth (font, hint) + 24.0f;
         auto pill = Rectangle<float> (w, 28.0f).withCentre ({ r.getCentreX(), r.getBottom() - 30.0f });
@@ -1327,13 +1326,13 @@ void MainComponent::showBigButtonEditMenu (int index)
     enum { renameId = 1, slotBase = 100 };
 
     PopupMenu menu;
-    menu.addSectionHeader ("Pedale " + String (index + 1) + "  (MIDI CC " + String (engine.getButtonCC (index)) + ")");
-    menu.addItem (renameId, "Nome quando non controlla posti (ora: " + button.label + ")...");
-    menu.addSectionHeader ("Posti che accende/spegne");
+    menu.addSectionHeader ("Footswitch " + String (index + 1) + "  (MIDI CC " + String (engine.getButtonCC (index)) + ")");
+    menu.addItem (renameId, "Name when no slots are assigned (now: " + button.label + ")...");
+    menu.addSectionHeader ("Slots it switches on/off");
 
     for (int s = 0; s < Engine::numSlots; ++s)
     {
-        const String name = engine.isSlotEmpty (s) ? String ("(vuoto)") : engine.getSlotName (s);
+        const String name = engine.isSlotEmpty (s) ? String ("(empty)") : engine.getSlotName (s);
         menu.addItem (slotBase + s, String (s + 1) + ".  " + name, true, button.slots.contains (s));
     }
 
@@ -1342,7 +1341,7 @@ void MainComponent::showBigButtonEditMenu (int index)
     {
         if (result == renameId)
         {
-            askText ("Nome del pedale quando non controlla posti", engine.getButton (index).label,
+            askText ("Footswitch name when no slots are assigned", engine.getButton (index).label,
                      [this, index] (String text) { engine.setButtonLabel (index, text); });
         }
         else if (result >= slotBase)
@@ -1363,10 +1362,10 @@ void MainComponent::showPresetMenu()
     const auto current = engine.getCurrentPresetFile();
 
     PopupMenu menu;
-    menu.addItem (save, "Salva", current.existsAsFile());
-    menu.addItem (saveAs, "Salva come...");
-    menu.addItem (newPreset, "Nuovo preset vuoto");
-    menu.addItem (openFolder, "Apri cartella dei preset");
+    menu.addItem (save, "Save", current.existsAsFile());
+    menu.addItem (saveAs, "Save as...");
+    menu.addItem (newPreset, "New empty preset");
+    menu.addItem (openFolder, "Open preset folder");
     menu.addSeparator();
     menu.addItem (tempo, "Tempo: " + String (roundToInt (engine.getBpm())) + " BPM...");
 
@@ -1394,7 +1393,7 @@ void MainComponent::showPresetMenu()
         }
         else if (result == tempo)
         {
-            askText ("Tempo per i delay e i riverberi sincronizzati (BPM)", String (roundToInt (engine.getBpm())),
+            askText ("Tempo for synced delays and reverbs (BPM)", String (roundToInt (engine.getBpm())),
                      [this] (String text)
                      {
                          if (const double bpm = text.getDoubleValue(); bpm > 0.0)
@@ -1412,7 +1411,7 @@ void MainComponent::showPresetMenu()
             {
                 String errors;
                 if (! engine.loadPreset (file, errors))
-                    showError ("Alcuni plugin non sono stati caricati", errors);
+                    showError ("Some plugins could not be loaded", errors);
             });
         }
     });
@@ -1420,12 +1419,12 @@ void MainComponent::showPresetMenu()
 
 void MainComponent::saveCurrentPresetAs (std::function<void()> afterSave)
 {
-    askText ("Salva preset come", engine.getCurrentPresetFile().getFileNameWithoutExtension(),
+    askText ("Save preset as", engine.getCurrentPresetFile().getFileNameWithoutExtension(),
              [this, afterSave] (String name)
     {
         const auto file = engine.getPresetFolder().getChildFile (File::createLegalFileName (name));
         if (! engine.savePreset (file))
-            showError ("Salvataggio non riuscito", file.getFullPathName());
+            showError ("Save failed", file.getFullPathName());
         else if (afterSave != nullptr)
             afterSave();
     });
@@ -1441,11 +1440,11 @@ void MainComponent::confirmPresetSwitch (std::function<void()> switchPreset)
 
     const auto options = MessageBoxOptions()
                              .withIconType (MessageBoxIconType::QuestionIcon)
-                             .withTitle ("Modifiche non salvate")
-                             .withMessage ("Il preset \"" + engine.getCurrentPresetName() + "\" ha modifiche non salvate.")
-                             .withButton ("Salva e cambia", 1)
-                             .withButton ("Cambia senza salvare", 2)
-                             .withButton ("Annulla", 0);
+                             .withTitle ("Unsaved changes")
+                             .withMessage ("The preset \"" + engine.getCurrentPresetName() + "\" has unsaved changes.")
+                             .withButton ("Save and switch", 1)
+                             .withButton ("Switch without saving", 2)
+                             .withButton ("Cancel", 0);
 
     SafePointer<MainComponent> safeThis (this);
     AlertWindow::showAsync (options, [safeThis, switchPreset] (int result)
@@ -1462,7 +1461,7 @@ void MainComponent::confirmPresetSwitch (std::function<void()> switchPreset)
                 if (safeThis->engine.savePreset (current))
                     switchPreset();
                 else
-                    safeThis->showError ("Salvataggio non riuscito", current.getFullPathName());
+                    safeThis->showError ("Save failed", current.getFullPathName());
             }
             else
             {
@@ -1483,27 +1482,27 @@ void MainComponent::showSettingsMenu()
     PopupMenu inputMenu;
     const int numInputs = engine.getNumDeviceInputs();
     for (int i = 0; i < jmax (1, numInputs); ++i)
-        inputMenu.addItem (inputBase + i, "Ingresso " + String (i + 1), i < numInputs, engine.getInputChannel() == i);
+        inputMenu.addItem (inputBase + i, "Input " + String (i + 1), i < numInputs, engine.getInputChannel() == i);
 
     PopupMenu midiMenu;
-    midiMenu.addItem (midiMomentary, "Ogni pressione alterna on/off", true, engine.getMidiMode() == Engine::MidiMode::momentary);
-    midiMenu.addItem (midiAbsolute,  "Il valore decide (127 = on, 0 = off)", true, engine.getMidiMode() == Engine::MidiMode::absolute);
+    midiMenu.addItem (midiMomentary, "Momentary: each press toggles", true, engine.getMidiMode() == Engine::MidiMode::momentary);
+    midiMenu.addItem (midiAbsolute,  "Absolute: the value decides (127 = on, 0 = off)", true, engine.getMidiMode() == Engine::MidiMode::absolute);
     midiMenu.addSeparator();
-    midiMenu.addItem (-1, "Pulsanti: CC " + String (engine.getButtonCC (0)) + "-" + String (engine.getButtonCC (Engine::numButtons - 1))
-                            + "   Accordatore: CC " + String (engine.getTunerCC()), false);
-    midiMenu.addItem (-2, "Preset: CC " + String (engine.getNextPresetCC()) + " avanti, CC " + String (engine.getPrevPresetCC())
-                            + " indietro, Program Change = n. preset", false);
+    midiMenu.addItem (-1, "Footswitches: CC " + String (engine.getButtonCC (0)) + "-" + String (engine.getButtonCC (Engine::numButtons - 1))
+                            + "   Tuner: CC " + String (engine.getTunerCC()), false);
+    midiMenu.addItem (-2, "Presets: CC " + String (engine.getNextPresetCC()) + " next, CC " + String (engine.getPrevPresetCC())
+                            + " previous, Program Change = preset number", false);
 
     const bool isFullScreen = Desktop::getInstance().getKioskModeComponent() != nullptr;
 
     PopupMenu menu;
-    menu.addItem (audioSettings, "Scheda audio...");
-    menu.addItem (pluginList, "Scegli plugin...");
-    menu.addSubMenu ("Ingresso chitarra", inputMenu);
-    menu.addSubMenu ("Pedaliera MIDI", midiMenu);
-    menu.addItem (fullScreen, "Schermo intero", true, isFullScreen);
+    menu.addItem (audioSettings, "Audio device...");
+    menu.addItem (pluginList, "Choose plugins...");
+    menu.addSubMenu ("Guitar input", inputMenu);
+    menu.addSubMenu ("MIDI foot controller", midiMenu);
+    menu.addItem (fullScreen, "Full screen", true, isFullScreen);
     menu.addSeparator();
-    menu.addItem (quit, "Esci");
+    menu.addItem (quit, "Quit");
 
     menu.showMenuAsync (PopupMenu::Options().withTargetComponent (settingsButton),
                         [this, isFullScreen] (int result)
@@ -1545,13 +1544,13 @@ void MainComponent::showAudioSettings()
                                                        true, false, false, false);
     selector->setItemHeight (36);
     selector->setSize (640, 560);
-    launchDialog ("Scheda audio", selector);
+    launchDialog ("Audio device", selector);
 }
 
 void MainComponent::showPluginChooser()
 {
     SafePointer<MainComponent> safeThis (this);
-    launchDialog ("Scegli plugin", new PluginChooser (engine, [safeThis]
+    launchDialog ("Choose plugin", new PluginChooser (engine, [safeThis]
     {
         if (safeThis != nullptr)
             safeThis->showPluginList();
@@ -1563,7 +1562,7 @@ void MainComponent::showPluginList()
     auto* list = new PluginListComponent (engine.formatManager, engine.knownPlugins,
                                           engine.getDeadMansPedalFile(), &engine.props(), true);
     list->setSize (760, 560);
-    launchDialog ("Lista completa dei plugin (avanzate)", list);
+    launchDialog ("Full plugin list (advanced)", list);
 }
 
 void MainComponent::openPluginWindow (AudioProcessor* processor)
@@ -1595,7 +1594,7 @@ void MainComponent::askText (const String& title, const String& initial, std::fu
     textInput = std::make_unique<AlertWindow> (title, String(), MessageBoxIconType::NoIcon);
     textInput->addTextEditor ("text", initial);
     textInput->addButton ("OK", 1, KeyPress (KeyPress::returnKey));
-    textInput->addButton ("Annulla", 0, KeyPress (KeyPress::escapeKey));
+    textInput->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
     textInput->setAlwaysOnTop (true);
 
     SafePointer<MainComponent> safeThis (this);

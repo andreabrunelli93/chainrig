@@ -39,7 +39,7 @@ public:
 
         if (rate <= 0.0)
         {
-            error = "Nessuna scheda audio attiva.";
+            error = "No audio device is running.";
             return false;
         }
 
@@ -53,7 +53,7 @@ public:
 
         if (stream == nullptr)
         {
-            error = "Non riesco a creare il file in " + folder.getFullPathName();
+            error = "Could not create the file in " + folder.getFullPathName();
             return false;
         }
 
@@ -65,7 +65,7 @@ public:
 
         if (writer == nullptr)
         {
-            error = "Non riesco a scrivere il file WAV.";
+            error = "Could not write the WAV file.";
             file.deleteFile();
             return false;
         }
@@ -207,7 +207,7 @@ public:
 
 private:
     juce::AudioIODeviceCallback& player;
-    juce::TimeSliceThread writerThread { "Registrazione WAV" };
+    juce::TimeSliceThread writerThread { "WAV recording" };
 
     std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> threadedWriter;
     juce::CriticalSection writerLock;

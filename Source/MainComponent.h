@@ -199,12 +199,12 @@ private:
     bool editMode = false;
 
     PresetSelector presetSelector;
-    StageButton tunerButton    { "ACCORDATORE", Icons::Ui::tuningFork },
+    StageButton tunerButton    { "TUNER", Icons::Ui::tuningFork },
                 recButton      { "REC", std::nullopt, StageButton::Style::record },
-                editButton     { "MODIFICA" },
+                editButton     { "EDIT" },
                 settingsButton { "", Icons::Ui::settings };
     StatusDisplay statusDisplay;
-    juce::Rectangle<int> chainHeader;      // "CATENA DEL SEGNALE" e riepilogo
+    juce::Rectangle<int> chainHeader;      // "SIGNAL CHAIN" e riepilogo
 
     int dragSource = -1, dragTarget = -1;
     juce::Point<int> dragPosition, dragGrabOffset;

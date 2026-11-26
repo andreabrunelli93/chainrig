@@ -89,7 +89,7 @@ namespace PluginScanner
             const bool ok = scan (format, result, fileOrIdentifier);
             const auto seconds = juce::String ((juce::Time::getMillisecondCounter() - start) / 1000.0, 1);
 
-            log ((ok ? juce::String ("OK    ") : juce::String ("ESCLUSO")) + "  " + seconds + " s  "
+            log ((ok ? juce::String ("OK    ") : juce::String ("EXCLUDED")) + "  " + seconds + " s  "
                  + juce::String (result.size()) + " plugin  " + fileOrIdentifier
                  + (lastProblem.isNotEmpty() ? "  (" + lastProblem + ")" : juce::String()));
             return ok;
@@ -97,7 +97,7 @@ namespace PluginScanner
 
         void scanFinished() override
         {
-            log ("--- fine ricerca ---");
+            log ("--- scan finished ---");
         }
 
     private:
@@ -123,7 +123,7 @@ namespace PluginScanner
             juce::ChildProcess child;
 
             if (! child.start (command, 0))
-                return fail ("impossibile avviare " + exe.getFullPathName());
+                return fail ("could not start " + exe.getFullPathName());
 
             // Attende a piccoli passi per poter interrompere se l'utente preme Annulla
             for (int waited = 0; child.isRunning(); waited += 100)
@@ -136,23 +136,23 @@ namespace PluginScanner
 
                     if (cancelled)
                     {
-                        lastProblem = "annullato";
+                        lastProblem = "cancelled";
                         return true;       // annullato: niente esclusione
                     }
 
-                    return fail ("bloccato oltre " + juce::String (timeoutMs / 1000) + " s");
+                    return fail ("hung for more than " + juce::String (timeoutMs / 1000) + " s");
                 }
 
                 juce::Thread::sleep (100);
             }
 
             if (const auto code = child.getExitCode(); code != 0)
-                return fail ("uscito con codice " + juce::String (code));
+                return fail ("exited with code " + juce::String (code));
 
             auto xml = juce::parseXML (resultFile.getFile());
 
             if (xml == nullptr || ! xml->hasTagName ("PLUGINS"))
-                return fail ("nessun risultato, probabile crash");   // crash a metà (su macOS un segnale può dare codice 0)
+                return fail ("no result, probably crashed");   // crash a metà (su macOS un segnale può dare codice 0)
 
             for (auto* e : xml->getChildIterator())
             {
@@ -163,7 +163,7 @@ namespace PluginScanner
             }
 
             if (result.isEmpty())
-                lastProblem = "nessun plugin nel file";
+                lastProblem = "no plugins in the file";
 
             return true;
         }
