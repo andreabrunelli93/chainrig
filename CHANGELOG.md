@@ -2,6 +2,11 @@
 
 All notable changes to ChainRig. Versions follow [semantic versioning](https://semver.org): small improvements bump the last number (0.2.1), new major features the middle one.
 
+## [Unreleased]
+
+### Added
+- App icon: a bike chainring with a guitar pick at two o'clock, black on yellow (`assets/logo.svg`). Used for the Windows executable and taskbar, the macOS app and the README.
+
 ## [0.2.1] - 2026-11-26
 
 ### Added

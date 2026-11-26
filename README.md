@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo.svg" width="128" alt="ChainRig logo"></p>
+
 # ChainRig
 
 A live-performance host for guitarists: a 10-slot VST3 chain, 4 large touch footswitches,

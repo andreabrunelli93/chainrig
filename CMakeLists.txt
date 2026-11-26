@@ -30,6 +30,9 @@ juce_add_gui_app(ChainRig
     PRODUCT_NAME "ChainRig"
     COMPANY_NAME "ChainRig"
     BUNDLE_ID "com.chainrig.app"
+    # Icona dell'app (JUCE genera .icns per macOS e .ico per Windows)
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/logo-1024.png"
+    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/assets/logo-1024.png"
     # macOS: senza questo permesso l'ingresso della scheda audio arriva muto
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "ChainRig usa l'ingresso della scheda audio per la chitarra.")
