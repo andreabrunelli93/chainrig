@@ -504,9 +504,9 @@ Engine::SlotKind Engine::guessSlotKind (int slot) const
     };
 
     // L'ordine conta: prima i nomi più specifici
-    if (has ({ "tone3000", "neural amp", " nam", "amp sim", "amplifier" }))  return SlotKind::amp;
+    if (has ({ "neural amp", " nam", "amp sim", "amplifier" }))  return SlotKind::amp;
     if (has ({ "impulse", "cab", " ir ", "ir loader", "speaker" }))         return SlotKind::ir;
-    if (has ({ "reverb", "verb", "plate", "room", "hall", "shimmer", "supermassive", "bigsky", "crystalline" }))
+    if (has ({ "reverb", "verb", "plate", "room", "hall", "shimmer" }))
         return SlotKind::reverb;
     if (has ({ "delay", "echo" }))                                          return SlotKind::delay;
     if (has ({ "dynamics", "compress", "limit" }))                          return SlotKind::compressor;

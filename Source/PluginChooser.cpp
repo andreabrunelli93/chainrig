@@ -18,7 +18,7 @@ PluginChooser::PluginChooser (Engine& e, std::function<void()> advanced)
 
     filter.setFont (Fonts::text (20.0f));
     filter.setIndents (16, 14);
-    filter.setTextToShowWhenEmpty ("Filtra per nome (es. valhalla, tone)", Palette::textFaint);
+    filter.setTextToShowWhenEmpty ("Filtra per nome (es. reverb, amp)", Palette::textFaint);
     filter.setColour (TextEditor::backgroundColourId, Palette::background);
     filter.setColour (TextEditor::textColourId, Palette::text);
     filter.setColour (TextEditor::outlineColourId, Palette::borderLight);

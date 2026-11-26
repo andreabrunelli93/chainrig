@@ -770,7 +770,7 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     engine.onProcessorAboutToBeDeleted = [this] (AudioProcessor* p) { pluginWindows.erase (p); };
     engine.addChangeListener (this);
 
-    setSize (1368, 912);   // Surface Pro 7 al 200%
+    setSize (1368, 912);   // tablet 3:2 (2736x1824) al 200%
     refresh();
     updateStatus();
     startTimerHz (4);
