@@ -4,6 +4,9 @@ All notable changes to ChainRig. Versions follow [semantic versioning](https://s
 
 ## [Unreleased]
 
+### Added
+- Settings menu: "Support ChainRig: buy me a coffee..." opens the donation page in the browser.
+
 ## [0.2.2] - 2026-11-26
 
 ### Added

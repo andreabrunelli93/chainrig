@@ -1603,7 +1603,7 @@ void MainComponent::confirmPresetSwitch (std::function<void()> switchPreset)
 void MainComponent::showSettingsMenu()
 {
     enum { audioSettings = 1, pluginList, midiMomentary, midiAbsolute, fullScreen, quit,
-           checkUpdatesNow, autoUpdateCheck, inputBase = 100 };
+           checkUpdatesNow, autoUpdateCheck, donate, inputBase = 100 };
 
     PopupMenu inputMenu;
     const int numInputs = engine.getNumDeviceInputs();
@@ -1632,6 +1632,9 @@ void MainComponent::showSettingsMenu()
     menu.addItem (checkUpdatesNow, "Check for updates now");
     menu.addItem (autoUpdateCheck, "Check for updates at startup", true, engine.props().getBoolValue ("checkUpdates", true));
     menu.addSeparator();
+    // ChainRig è gratuito: un link per chi vuole sostenerlo, mai mostrato da solo
+    menu.addItem (donate, "Support ChainRig: buy me a coffee...");
+    menu.addSeparator();
     menu.addItem (quit, "Quit");
 
     menu.showMenuAsync (PopupMenu::Options().withTargetComponent (settingsButton),
@@ -1649,6 +1652,7 @@ void MainComponent::showSettingsMenu()
                 engine.props().setValue ("checkUpdates", ! engine.props().getBoolValue ("checkUpdates", true));
                 engine.props().saveIfNeeded();
                 break;
+            case donate:        URL ("https://buymeacoffee.com/andreabrunelli").launchInDefaultBrowser(); break;
             case quit:          JUCEApplication::getInstance()->systemRequestedQuit(); break;
             default:
                 if (result >= inputBase)
