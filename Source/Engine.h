@@ -108,6 +108,10 @@ public:
     void loadAdjacentPreset (int delta);
     void newEmptyPreset();
     juce::File getCurrentPresetFile() const       { return currentPresetFile; }
+
+    /** Tempo comunicato ai plugin (delay e riverberi sincronizzati). Salvato nel preset. */
+    double getBpm() const                         { return playHead.bpm.load(); }
+    void setBpm (double bpm);
     juce::String getCurrentPresetName() const;
 
     //==============================================================================
@@ -149,7 +153,24 @@ private:
     std::unique_ptr<juce::AudioPluginInstance> createInstance (const juce::PluginDescription&, juce::String& error,
                                                                juce::PluginDescription& usedDescription);
 
+    /** Senza un BPM i plugin VST3 ricevono "tempo non valido" (0): alcuni delay sincronizzati
+        allora portano il tempo al massimo e sembrano un looper di 10-20 secondi. */
+    struct TempoPlayHead final : public juce::AudioPlayHead
+    {
+        std::atomic<double> bpm { 120.0 };
+
+        juce::Optional<PositionInfo> getPosition() const override
+        {
+            PositionInfo info;
+            info.setBpm (bpm.load());
+            info.setTimeSignature (TimeSignature { 4, 4 });
+            info.setIsPlaying (false);
+            return info;
+        }
+    };
+
     mutable juce::ApplicationProperties appProperties;
+    TempoPlayHead playHead;                     // deve vivere più a lungo del grafo
     juce::AudioProcessorGraph graph;
     juce::AudioProcessorPlayer player;
     Recorder recorder { player };   // avvolge il player: è lui il callback della scheda audio

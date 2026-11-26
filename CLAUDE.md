@@ -24,6 +24,7 @@ Nella catena l'utente userà: catture NAM A2 (plugin TONE3000 o NAM), IR, Valhal
   Il grafo va da ingresso → TunerProcessor → posti → uscita (solo canali 1-2).
   - Le modifiche alla struttura si fanno con `UpdateKind::none` e poi `rewire()`, che chiama `graph.rebuild()`.
   - Il bypass è `Node::setBypassed`.
+  - Il grafo ha un `TempoPlayHead` con il BPM del preset (chiave `bpm`, predefinito 120). Senza, il player di JUCE passa una posizione senza tempo: i VST3 ricevono tempo 0 e un delay sincronizzato (ValhallaDelay) andava al tempo massimo, come un looper di 10-20 s.
   - Ogni posto ha `customName` e `SlotKind` (amp, ir, drive, compressor, eq, modulation, delay, reverb, fx oppure automatic, che viene ricavato da categoria e nome). Nei preset sono le chiavi `label` e `kind`.
   - Ogni posto salva la `PluginDescription` usata per crearlo: serve per i preset, perché quella dell'istanza VST3 punta al file `.so`/`.dll` interno e non al bundle.
   - Il MIDI viene ricevuto sul thread MIDI e passato al thread dell'interfaccia con `callAsync` + `WeakReference`.

@@ -45,6 +45,7 @@ Engine::Engine()
     tuner = tunerProcessor.get();
     tunerNode = graph.addNode (std::move (tunerProcessor))->nodeID;
 
+    graph.setPlayHead (&playHead);   // i nodi ricevono questo tempo (vedi TempoPlayHead)
     player.setProcessor (&graph);
 
     // Scheda audio: ripristina l'ultima configurazione, altrimenti preferisci ASIO
@@ -745,6 +746,7 @@ String Engine::getStatusText() const
     // due righe: scheda e formato; latenza, carico e buchi
     return deviceName + String::fromUTF8 ("  ·  ") + String (deviceSampleRate / 1000.0, 1).replace (".", ",")
          + String::fromUTF8 (" kHz  ·  buffer ") + String (deviceBufferSize)
+         + String::fromUTF8 ("  ·  ") + String (roundToInt (getBpm())) + " BPM"
          + "\nlatenza " + String (deviceLatencyMs, 1).replace (".", ",") + String::fromUTF8 (" ms  ·  CPU ")
          + String (roundToInt (deviceManager.getCpuUsage() * 100.0)) + String::fromUTF8 ("%  ·  picco ")
          + String (roundToInt (recentPeakLoad * 100.0f)) + String::fromUTF8 ("%  ·  xrun ")
@@ -830,6 +832,7 @@ bool Engine::savePreset (const File& fileIn)
 
     auto root = std::make_unique<DynamicObject>();
     root->setProperty ("version", 1);
+    root->setProperty ("bpm", getBpm());
 
     Array<var> slotList;
     for (int i = 0; i < numSlots; ++i)
@@ -893,6 +896,8 @@ bool Engine::loadPreset (const File& file, String& errors)
         errors = "File preset non valido: " + file.getFileName();
         return false;
     }
+
+    setBpm (root.hasProperty ("bpm") ? (double) root["bpm"] : 120.0);
 
     // Svuota tutto senza ricostruire il grafo a ogni passo
     for (int i = 0; i < numSlots; ++i)
@@ -962,6 +967,12 @@ bool Engine::loadPreset (const File& file, String& errors)
     rewire();
     sendChangeMessage();
     return errors.isEmpty();
+}
+
+void Engine::setBpm (double bpm)
+{
+    playHead.bpm = jlimit (30.0, 300.0, bpm);
+    sendChangeMessage();
 }
 
 void Engine::loadAdjacentPreset (int delta)

@@ -1075,7 +1075,7 @@ void MainComponent::showBigButtonEditMenu (int index)
 //==============================================================================
 void MainComponent::showPresetMenu()
 {
-    enum { save = 1, saveAs, newPreset, openFolder, presetBase = 1000 };
+    enum { save = 1, saveAs, newPreset, openFolder, tempo, presetBase = 1000 };
 
     const auto files = engine.getPresetFiles();
     const auto current = engine.getCurrentPresetFile();
@@ -1085,6 +1085,8 @@ void MainComponent::showPresetMenu()
     menu.addItem (saveAs, "Salva come...");
     menu.addItem (newPreset, "Nuovo preset vuoto");
     menu.addItem (openFolder, "Apri cartella dei preset");
+    menu.addSeparator();
+    menu.addItem (tempo, "Tempo: " + String (roundToInt (engine.getBpm())) + " BPM...");
 
     if (! files.isEmpty())
     {
@@ -1113,6 +1115,15 @@ void MainComponent::showPresetMenu()
         else if (result == newPreset)
         {
             engine.newEmptyPreset();
+        }
+        else if (result == tempo)
+        {
+            askText ("Tempo per i delay e i riverberi sincronizzati (BPM)", String (roundToInt (engine.getBpm())),
+                     [this] (String text)
+                     {
+                         if (const double bpm = text.getDoubleValue(); bpm > 0.0)
+                             engine.setBpm (bpm);
+                     });
         }
         else if (result == openFolder)
         {

@@ -48,6 +48,11 @@ Le impostazioni sono salvate in `~/Library/Application Support/ChainRig/ChainRig
 
 > I preset fatti su Mac aperti su Windows ritrovano i plugin cercandoli per nome e identificativo. I percorsi dei file `.nam` e delle IR, invece, cambiano tra un sistema e l'altro: sul Surface dovrai ricaricarli una volta e risalvare il preset.
 
+## Tempo (BPM)
+
+Tocca il nome del preset → **Tempo: 120 BPM...** per impostare il tempo dei delay e dei riverberi sincronizzati
+(per esempio un delay a ottavi). Il tempo viene salvato nel preset e compare nella barra in alto.
+
 ## Livello d'uscita
 
 La barra a destra mostra il livello d'uscita (L e R) da −48 a 0 dBFS. È verde fino a −12, gialla fino a −3 e rossa sopra.
