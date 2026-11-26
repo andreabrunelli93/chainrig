@@ -161,8 +161,35 @@ void SlotView::paint (Graphics& g)
     g.drawText (status, statusRow.withTrimmedLeft (16.0f), Justification::centredLeft, true);
 }
 
+void SlotView::mouseDown (const MouseEvent&)
+{
+    dragging = false;
+}
+
+void SlotView::mouseDrag (const MouseEvent& e)
+{
+    if (owner.getEngine().isSlotEmpty (index))
+        return;
+
+    if (! dragging && e.getDistanceFromDragStart() > 12)
+    {
+        dragging = true;
+        owner.slotDragStarted (index, e.getMouseDownPosition());
+    }
+
+    if (dragging)
+        owner.slotDragged (e.getEventRelativeTo (&owner).getPosition());
+}
+
 void SlotView::mouseUp (const MouseEvent& e)
 {
+    if (dragging)
+    {
+        dragging = false;
+        owner.slotDropped();
+        return;
+    }
+
     if (e.mouseWasClicked())
         owner.showSlotMenu (index);
 }
@@ -1028,6 +1055,82 @@ void MainComponent::showSlotMenu (int slot)
             default: break;
         }
     });
+}
+
+int MainComponent::slotAt (Point<int> p) const
+{
+    for (int i = 0; i < slotViews.size(); ++i)
+        if (slotViews[i]->getBounds().expanded (7).contains (p))
+            return i;
+    return -1;
+}
+
+void MainComponent::slotDragStarted (int slot, Point<int> grabOffset)
+{
+    dragSource = slot;
+    dragTarget = -1;
+    dragGrabOffset = grabOffset;
+    dragImage = slotViews[slot]->createComponentSnapshot (slotViews[slot]->getLocalBounds(), true);
+    slotViews[slot]->setAlpha (0.3f);   // il posto d'origine resta, attenuato
+}
+
+void MainComponent::slotDragged (Point<int> position)
+{
+    dragPosition = position;
+    const int target = slotAt (position);
+    dragTarget = (target == dragSource) ? -1 : target;
+    repaint();
+}
+
+void MainComponent::slotDropped()
+{
+    const int from = dragSource, to = dragTarget;
+
+    if (from >= 0)
+        slotViews[from]->setAlpha (1.0f);
+
+    dragSource = dragTarget = -1;
+    dragImage = {};
+
+    if (from >= 0 && to >= 0)
+        engine.moveSlot (from, to);   // manda un change message: refresh() ridisegna tutto
+
+    refresh();
+}
+
+void MainComponent::paintOverChildren (Graphics& g)
+{
+    if (dragSource < 0)
+        return;
+
+    // destinazione: bordo ambra e cosa succederà
+    if (dragTarget >= 0)
+    {
+        const auto r = slotViews[dragTarget]->getBounds().toFloat().expanded (3.0f);
+        g.setColour (Palette::accent);
+        g.drawRoundedRectangle (r, 18.0f, 3.0f);
+
+        const String hint = engine.isSlotEmpty (dragTarget) ? "SPOSTA QUI" : "INSERISCI QUI";
+        const auto font = Fonts::display (12.0f);
+        const float w = GlyphArrangement::getStringWidth (font, hint) + 24.0f;
+        auto pill = Rectangle<float> (w, 28.0f).withCentre ({ r.getCentreX(), r.getBottom() - 30.0f });
+        g.fillRoundedRectangle (pill, 14.0f);
+        g.setColour (Palette::background);
+        g.setFont (font);
+        g.drawText (hint, pill, Justification::centred);
+    }
+
+    // il posto segue il dito, leggermente trasparente e con un'ombra
+    if (dragImage.isValid())
+    {
+        const auto topLeft = dragPosition - dragGrabOffset;
+        const auto area = Rectangle<float> ((float) topLeft.x, (float) topLeft.y,
+                                            (float) dragImage.getWidth(), (float) dragImage.getHeight());
+        g.setColour (Colours::black.withAlpha (0.45f));
+        g.fillRoundedRectangle (area.translated (0.0f, 10.0f).expanded (4.0f), 20.0f);
+        g.setOpacity (0.92f);
+        g.drawImage (dragImage, area);
+    }
 }
 
 void MainComponent::bigButtonPressed (int index)

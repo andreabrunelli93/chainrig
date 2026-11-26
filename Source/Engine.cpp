@@ -290,6 +290,45 @@ void Engine::swapSlots (int a, int b)
     sendChangeMessage();
 }
 
+void Engine::moveSlot (int from, int to)
+{
+    if (! isPositiveAndBelow (from, numSlots) || ! isPositiveAndBelow (to, numSlots) || from == to || isSlotEmpty (from))
+        return;
+
+    // order[nuovo indice] = vecchio indice
+    std::vector<int> order;
+    for (int i = 0; i < numSlots; ++i)
+        order.push_back (i);
+
+    if (isSlotEmpty (to))
+    {
+        std::swap (order[(size_t) from], order[(size_t) to]);
+    }
+    else
+    {
+        order.erase (order.begin() + from);
+        order.insert (order.begin() + to, from);
+    }
+
+    std::array<Slot, numSlots> moved;
+    std::array<int, numSlots> oldToNew {};
+
+    for (int i = 0; i < numSlots; ++i)
+    {
+        moved[(size_t) i] = slots[(size_t) order[(size_t) i]];
+        oldToNew[(size_t) order[(size_t) i]] = i;
+    }
+
+    slots = moved;
+
+    for (auto& button : buttons)
+        for (auto& s : button.slots)
+            s = oldToNew[(size_t) s];
+
+    rewire();
+    sendChangeMessage();
+}
+
 //==============================================================================
 void Engine::connectNodes (NodeID from, NodeID to, int maxDestChannels)
 {

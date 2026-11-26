@@ -6,7 +6,7 @@ accordatore, comandi da pedaliera MIDI e preset. Fatto con JUCE 9 per Windows
 
 ## Cosa fa
 
-- **10 posti in fila**: tocchi un posto e scegli un plugin dalla lista, che contiene solo i plugin scelti in **Scegli plugin**. Dallo stesso menu puoi aprire l'interfaccia del plugin, metterlo in bypass, sostituirlo, spostarlo o rimuoverlo. I posti vuoti vengono saltati.
+- **10 posti in fila**: tocchi un posto e scegli un plugin dalla lista, che contiene solo i plugin scelti in **Scegli plugin**. Dallo stesso menu puoi aprire l'interfaccia del plugin, metterlo in bypass, sostituirlo, spostarlo o rimuoverlo. Puoi anche **trascinare** un posto: su un posto vuoto ci si sposta, su uno occupato si inserisce e gli altri scorrono. I pedali seguono i plugin. I posti vuoti vengono saltati.
 - **Nome e tipo di ogni posto**: dal menu del posto puoi scegliere **Rinomina...** (per esempio "Twin clean" al posto di "TONE3000"; se lo lasci vuoto torna il nome del plugin) e **Tipo**: Amplificatore, Cassa / IR, Drive, Compressore, Equalizzatore, Modulazione, Delay, Riverbero, Altro effetto. Il tipo decide l'icona e l'etichetta del posto. Con "Automatico" viene ricavato dalla categoria e dal nome del plugin. Nome e tipo vengono salvati nel preset.
 - **4 pulsanti grandi**: ognuno accende e spegne i posti che gli assegni. Esempio: BOOST controlla il posto 2. Un posto assegnato a un pulsante suona solo quando quel pulsante è acceso.
 - **Accordatore**: lavora sull'ingresso, prima della catena, e silenzia l'uscita mentre accordi. Mostra la nota con il nome inglese e quello italiano, i cent e la frequenza.

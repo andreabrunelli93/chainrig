@@ -13,11 +13,14 @@ class SlotView final : public juce::Component
 public:
     SlotView (MainComponent& o, int i) : owner (o), index (i) {}
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;   // trascinare = spostare il posto
     void mouseUp (const juce::MouseEvent&) override;
 
 private:
     MainComponent& owner;
     const int index;
+    bool dragging = false;
 };
 
 //==============================================================================
@@ -133,6 +136,13 @@ public:
     bool isEditMode() const             { return editMode; }
 
     void showSlotMenu (int slot);
+
+    // Trascinamento dei posti (coordinate di MainComponent)
+    void slotDragStarted (int slot, juce::Point<int> grabOffset);
+    void slotDragged (juce::Point<int> position);
+    void slotDropped();
+    int getDragSource() const           { return dragSource; }
+    void paintOverChildren (juce::Graphics&) override;
     void bigButtonPressed (int index);
     void setFullScreen (bool);
 
@@ -167,6 +177,11 @@ private:
                 settingsButton { "", Icons::Ui::settings };
     StatusDisplay statusDisplay;
     juce::Rectangle<int> chainHeader;      // "CATENA DEL SEGNALE" e riepilogo
+
+    int dragSource = -1, dragTarget = -1;
+    juce::Point<int> dragPosition, dragGrabOffset;
+    juce::Image dragImage;
+    int slotAt (juce::Point<int>) const;
 
     juce::File lastRecording;              // ultimo file salvato, mostrato per qualche secondo
     juce::uint32 lastRecordingShownUntil = 0;

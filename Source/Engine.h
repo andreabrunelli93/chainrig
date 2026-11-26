@@ -63,6 +63,10 @@ public:
     void clearSlot (int slot);
     void swapSlots (int a, int b);
 
+    /** Sposta un posto: su un posto vuoto ci va e basta; su uno occupato si inserisce lì
+        e quelli in mezzo scorrono di uno. Le assegnazioni dei pedali seguono i plugin. */
+    void moveSlot (int from, int to);
+
     bool isSlotEmpty (int slot) const;
     juce::AudioProcessor* getSlotProcessor (int slot) const;
     juce::String getSlotName (int slot) const;            // nome scelto dall'utente, altrimenti quello del plugin
