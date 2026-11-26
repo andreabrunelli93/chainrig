@@ -2,6 +2,7 @@
 
 #include "Engine.h"
 #include "Look.h"
+#include "UpdateChecker.h"
 #include <map>
 
 class MainComponent;
@@ -63,12 +64,15 @@ private:
 class StatusDisplay final : public juce::Component
 {
 public:
-    void setLines (const juce::String& first, const juce::String& second, bool highlight);
+    std::function<void()> onClick;   // tocco sulla seconda riga quando mostra un avviso
+
+    void setLines (const juce::String& first, const juce::String& second, bool highlightFirst, bool highlightSecond = false);
     void paint (juce::Graphics&) override;
+    void mouseUp (const juce::MouseEvent&) override;
 
 private:
     juce::String line1, line2;
-    bool highlighted = false;
+    bool highlighted = false, secondHighlighted = false;
 };
 
 //==============================================================================
@@ -193,6 +197,13 @@ private:
     /** Esegue `switchPreset` subito, oppure prima chiede se salvare le modifiche. */
     void confirmPresetSwitch (std::function<void()> switchPreset);
     void saveCurrentPresetAs (std::function<void()> afterSave);
+
+    // Aggiornamenti: controllo dell'ultima release su GitHub
+    juce::String getCurrentVersion() const;
+    void checkForUpdates (bool manual);
+    void showUpdateDialog();
+    UpdateChecker updateChecker;
+    UpdateChecker::Result availableUpdate;   // .newer = c'è un avviso da mostrare
 
     StageLookAndFeel lookAndFeel;   // deve vivere più a lungo di tutti i componenti figli
     Engine& engine;

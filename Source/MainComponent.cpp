@@ -340,15 +340,23 @@ void PresetSelector::paint (Graphics& g)
 }
 
 //==============================================================================
-void StatusDisplay::setLines (const String& first, const String& second, bool highlight)
+void StatusDisplay::setLines (const String& first, const String& second, bool highlightFirst, bool highlightSecond)
 {
-    if (first == line1 && second == line2 && highlight == highlighted)
+    if (first == line1 && second == line2 && highlightFirst == highlighted && highlightSecond == secondHighlighted)
         return;
 
     line1 = first;
     line2 = second;
-    highlighted = highlight;
+    highlighted = highlightFirst;
+    secondHighlighted = highlightSecond;
+    setMouseCursor (highlightSecond ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
     repaint();
+}
+
+void StatusDisplay::mouseUp (const MouseEvent& e)
+{
+    if (secondHighlighted && e.mouseWasClicked() && onClick != nullptr)
+        onClick();
 }
 
 void StatusDisplay::paint (Graphics& g)
@@ -359,7 +367,7 @@ void StatusDisplay::paint (Graphics& g)
     g.setFont (Fonts::mono (12.0f));
     g.setColour (highlighted ? Palette::accent : Palette::text);
     g.drawText (line1, top.withTrimmedBottom (2.0f), Justification::bottomRight, true);
-    g.setColour (Palette::textDim);
+    g.setColour (secondHighlighted ? Palette::accent : Palette::textDim);
     g.drawText (line2, area.withTrimmedTop (2.0f), Justification::topRight, true);
 }
 
@@ -937,6 +945,15 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     updateStatus();
     startTimerHz (4);
 
+    statusDisplay.onClick = [this] { showUpdateDialog(); };
+
+    // controllo aggiornamenti: qualche secondo dopo l'avvio, in background
+    if (engine.props().getBoolValue ("checkUpdates", true))
+    {
+        SafePointer<MainComponent> safeThis (this);
+        Timer::callAfterDelay (4000, [safeThis] { if (safeThis != nullptr) safeThis->checkForUpdates (false); });
+    }
+
     // ripristino dopo una chiusura inattesa: avvisa quando la finestra è visibile
     if (const auto message = engine.takeStartupMessage(); message.isNotEmpty())
     {
@@ -1073,7 +1090,11 @@ void MainComponent::updateStatus()
     }
 
     const auto lines = StringArray::fromLines (engine.getStatusText());
-    statusDisplay.setLines (lines[0], lines[1], false);
+
+    if (availableUpdate.newer)
+        statusDisplay.setLines (lines[0], "Update v" + availableUpdate.latestVersion + String::fromUTF8 (" available  ·  tap"), false, true);
+    else
+        statusDisplay.setLines (lines[0], lines[1], false);
 }
 
 void MainComponent::toggleRecording()
@@ -1417,6 +1438,80 @@ void MainComponent::showPresetMenu()
     });
 }
 
+String MainComponent::getCurrentVersion() const
+{
+    // CHAINRIG_FAKE_VERSION=0.1.0 serve solo per provare l'avviso di aggiornamento
+    const auto fake = SystemStats::getEnvironmentVariable ("CHAINRIG_FAKE_VERSION", {});
+    return fake.isNotEmpty() ? fake : String (JUCE_APPLICATION_VERSION_STRING);
+}
+
+void MainComponent::checkForUpdates (bool manual)
+{
+    SafePointer<MainComponent> safeThis (this);
+
+    updateChecker.check (getCurrentVersion(), [safeThis, manual] (UpdateChecker::Result result)
+    {
+        if (safeThis == nullptr)
+            return;
+
+        auto& self = *safeThis;
+        const bool skipped = result.latestVersion == self.engine.props().getValue ("skippedUpdate");
+
+        if (result.ok && result.newer && (manual || ! skipped))
+        {
+            self.availableUpdate = result;
+            self.updateStatus();
+
+            if (manual)
+                self.showUpdateDialog();
+        }
+        else if (manual)
+        {
+            AlertWindow::showAsync (MessageBoxOptions::makeOptionsOk (MessageBoxIconType::InfoIcon, "Updates",
+                result.ok ? "You have the latest version (" + self.getCurrentVersion() + ")."
+                          : String ("Could not reach GitHub. Check your internet connection and try again.")),
+                nullptr);
+        }
+    });
+}
+
+void MainComponent::showUpdateDialog()
+{
+    if (! availableUpdate.newer)
+        return;
+
+    const auto options = MessageBoxOptions()
+                             .withIconType (MessageBoxIconType::InfoIcon)
+                             .withTitle ("Update available")
+                             .withMessage ("ChainRig " + availableUpdate.latestVersion + " is available (you have "
+                                           + getCurrentVersion() + ").\n\nDownload it from the release page, unzip it "
+                                           "and replace the current app. Your presets and settings are kept.")
+                             .withButton ("Download", 1)
+                             .withButton ("Skip this version", 2)
+                             .withButton ("Later", 0);
+
+    SafePointer<MainComponent> safeThis (this);
+    AlertWindow::showAsync (options, [safeThis] (int result)
+    {
+        if (safeThis == nullptr)
+            return;
+
+        auto& self = *safeThis;
+
+        if (result == 1)
+        {
+            URL (self.availableUpdate.pageUrl).launchInDefaultBrowser();
+        }
+        else if (result == 2)
+        {
+            self.engine.props().setValue ("skippedUpdate", self.availableUpdate.latestVersion);
+            self.engine.props().saveIfNeeded();
+            self.availableUpdate = {};
+            self.updateStatus();
+        }
+    });
+}
+
 void MainComponent::saveCurrentPresetAs (std::function<void()> afterSave)
 {
     askText ("Save preset as", engine.getCurrentPresetFile().getFileNameWithoutExtension(),
@@ -1477,7 +1572,8 @@ void MainComponent::confirmPresetSwitch (std::function<void()> switchPreset)
 
 void MainComponent::showSettingsMenu()
 {
-    enum { audioSettings = 1, pluginList, midiMomentary, midiAbsolute, fullScreen, quit, inputBase = 100 };
+    enum { audioSettings = 1, pluginList, midiMomentary, midiAbsolute, fullScreen, quit,
+           checkUpdatesNow, autoUpdateCheck, inputBase = 100 };
 
     PopupMenu inputMenu;
     const int numInputs = engine.getNumDeviceInputs();
@@ -1496,12 +1592,15 @@ void MainComponent::showSettingsMenu()
     const bool isFullScreen = Desktop::getInstance().getKioskModeComponent() != nullptr;
 
     PopupMenu menu;
-    menu.addSectionHeader (String ("ChainRig ") + JUCE_APPLICATION_VERSION_STRING);
+    menu.addSectionHeader ("ChainRig " + getCurrentVersion());
     menu.addItem (audioSettings, "Audio device...");
     menu.addItem (pluginList, "Choose plugins...");
     menu.addSubMenu ("Guitar input", inputMenu);
     menu.addSubMenu ("MIDI foot controller", midiMenu);
     menu.addItem (fullScreen, "Full screen", true, isFullScreen);
+    menu.addSeparator();
+    menu.addItem (checkUpdatesNow, "Check for updates now");
+    menu.addItem (autoUpdateCheck, "Check for updates at startup", true, engine.props().getBoolValue ("checkUpdates", true));
     menu.addSeparator();
     menu.addItem (quit, "Quit");
 
@@ -1515,6 +1614,11 @@ void MainComponent::showSettingsMenu()
             case midiMomentary: engine.setMidiMode (Engine::MidiMode::momentary); break;
             case midiAbsolute:  engine.setMidiMode (Engine::MidiMode::absolute); break;
             case fullScreen:    setFullScreen (! isFullScreen); break;
+            case checkUpdatesNow: checkForUpdates (true); break;
+            case autoUpdateCheck:
+                engine.props().setValue ("checkUpdates", ! engine.props().getBoolValue ("checkUpdates", true));
+                engine.props().saveIfNeeded();
+                break;
             case quit:          JUCEApplication::getInstance()->systemRequestedQuit(); break;
             default:
                 if (result >= inputBase)

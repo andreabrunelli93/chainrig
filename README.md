@@ -11,6 +11,8 @@ Get the latest version from the **[Releases page](https://github.com/andreabrune
 - **Windows** (64-bit): `ChainRig-Windows-x64.zip`. Unzip it and run `ChainRig.exe`. No installer and no extra runtime needed. The app is not code-signed, so Windows SmartScreen may warn you: choose *More info → Run anyway*.
 - **macOS** (Apple Silicon and Intel): `ChainRig-macOS.zip`. Unzip it and move `ChainRig.app` to *Applications*. The app is not notarized, so the first time right-click it and choose *Open*, or run `xattr -dr com.apple.quarantine /Applications/ChainRig.app`.
 
+ChainRig checks GitHub for a newer release a few seconds after launch (read-only, no data is sent). When one is available, the status area shows "Update vX.Y.Z available · tap": tap it to open the release page, postpone it, or skip that version. It never interrupts you with a popup. Turn it off or check manually from the Settings menu.
+
 You also need your own VST3 plugins and, on Windows, your audio interface's ASIO driver.
 
 ## Features
@@ -125,6 +127,7 @@ Bluetooth: controllers sold with their own USB dongle work out of the box. For n
 - `Source/Tuner.h`: tuner node, lock-free FIFO to the UI, YIN pitch detection.
 - `Source/PluginScanner.h`: out-of-process plugin scanning.
 - `Source/PluginChooser.*`: the "choose plugins" window.
+- `Source/UpdateChecker.h`: background check of the latest GitHub release.
 - `Source/Look.*`: colours, fonts, icons, look and feel, top-bar buttons.
 - `Source/MainComponent.*`: the touch UI (preset selector, slots, footswitches, meter, tuner overlay, plugin windows).
 - `Source/Main.cpp`: application, main window and the scanner child process entry point.
