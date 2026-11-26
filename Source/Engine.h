@@ -15,6 +15,7 @@
     (message thread). Il thread audio vede solo l'AudioProcessorGraph. */
 class Engine final : public juce::ChangeBroadcaster,
                      private juce::ChangeListener,
+                     private juce::AudioProcessorListener,
                      private juce::MidiInputCallback,
                      private juce::Timer
 {
@@ -117,6 +118,13 @@ public:
     void newEmptyPreset();
     juce::File getCurrentPresetFile() const       { return currentPresetFile; }
 
+    /** Vero se la catena è cambiata dall'ultimo salvataggio o caricamento
+        (accendere/spegnere i pedali non conta: è l'uso normale dal vivo). */
+    bool hasUnsavedChanges() const                { return dirty; }
+
+    /** Messaggio da mostrare all'avvio (ripristino dopo una chiusura inattesa), poi si svuota. */
+    juce::String takeStartupMessage()             { return std::exchange (startupMessage, {}); }
+
     /** Tempo comunicato ai plugin (delay e riverberi sincronizzati). Salvato nel preset. */
     double getBpm() const                         { return playHead.bpm.load(); }
     void setBpm (double bpm);
@@ -199,6 +207,27 @@ private:
     juce::File currentPresetFile;
 
     juce::StringArray knownMidiInputs;
+
+    // Preset come dati (usati sia per i file .chainrig sia per il recupero)
+    juce::var createPresetState() const;
+    bool loadPresetState (const juce::var& root, juce::String& errors, const juce::String& nameForLog);
+
+    // Modifiche non salvate e recupero dopo una chiusura inattesa
+    void audioProcessorParameterChanged (juce::AudioProcessor*, int, float) override;
+    void audioProcessorChanged (juce::AudioProcessor*, const ChangeDetails&) override;
+    void markDirty();
+    void markClean();
+    void listenTo (juce::AudioProcessorGraph::NodeID);
+    juce::File getRecoveryFile() const;
+    void writeRecoveryIfNeeded();
+    bool restoreFromRecovery();
+
+    bool dirty = false;
+    std::atomic<bool> pluginStateChanged { false };   // impostato anche dal thread audio
+    juce::uint32 ignorePluginChangesUntil = 0;
+    bool recoveryPending = false;
+    juce::uint32 lastRecoveryWrite = 0;
+    juce::String startupMessage;
 
     // Stato della scheda letto solo quando cambia: interrogare CoreAudio/ASIO di continuo
     // dal thread dell'interfaccia può disturbare il thread audio

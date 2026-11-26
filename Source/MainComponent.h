@@ -44,7 +44,7 @@ class PresetSelector final : public juce::Component
 public:
     std::function<void()> onPrev, onNext, onMenu;
 
-    void setPreset (const juce::String& name, int number, int total);
+    void setPreset (const juce::String& name, int number, int total, bool unsaved);
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
@@ -54,6 +54,7 @@ private:
 
     juce::String name;
     int number = 0, total = 0;
+    bool unsaved = false;
     int pressedZone = -2;
 };
 
@@ -188,6 +189,10 @@ private:
     void toggleRecording();
     void updateRecButton();
     void updateStatus();
+
+    /** Esegue `switchPreset` subito, oppure prima chiede se salvare le modifiche. */
+    void confirmPresetSwitch (std::function<void()> switchPreset);
+    void saveCurrentPresetAs (std::function<void()> afterSave);
 
     StageLookAndFeel lookAndFeel;   // deve vivere più a lungo di tutti i componenti figli
     Engine& engine;

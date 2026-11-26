@@ -74,11 +74,14 @@ Engine::Engine()
 
     rewire();
 
-    const File lastPreset (props().getValue ("lastPreset"));
-    if (lastPreset.existsAsFile())
+    if (! restoreFromRecovery())
     {
-        String errors;
-        loadPreset (lastPreset, errors);
+        const File lastPreset (props().getValue ("lastPreset"));
+        if (lastPreset.existsAsFile())
+        {
+            String errors;
+            loadPreset (lastPreset, errors);
+        }
     }
 
     recorder.setInputChannel (inputChannel);
@@ -90,6 +93,7 @@ Engine::~Engine()
 {
     stopTimer();
     saveSettings();
+    getRecoveryFile().deleteFile();   // chiusura normale: niente da ripristinare
 
     deviceManager.removeMidiInputDeviceCallback ({}, this);
     recorder.stop();
@@ -221,6 +225,7 @@ bool Engine::loadPluginIntoSlot (int slot, const PluginDescription& desc, String
 
     installInSlot (slot, std::move (instance), used, UpdateKind::none);
     rewire();
+    markDirty();
     sendChangeMessage();
     return true;
 }
@@ -235,6 +240,7 @@ void Engine::installInSlot (int slot, std::unique_ptr<AudioPluginInstance> insta
         slots[(size_t) slot].node = node->nodeID;
         slots[(size_t) slot].description = description;
         slots[(size_t) slot].userBypassed = false;
+        listenTo (node->nodeID);
         slots[(size_t) slot].customName.clear();
         slots[(size_t) slot].kind = SlotKind::automatic;
     }
@@ -248,8 +254,12 @@ void Engine::removeSlotNode (int slot, UpdateKind kind)
         return;
 
     if (auto* node = graph.getNodeForId (*s.node))
+    {
+        node->getProcessor()->removeListener (this);
+
         if (onProcessorAboutToBeDeleted != nullptr)
             onProcessorAboutToBeDeleted (node->getProcessor());
+    }
 
     // Il grafo tiene vivo il nodo finché il thread audio lo sta ancora usando
     graph.removeNode (*s.node, kind);
@@ -266,6 +276,7 @@ void Engine::clearSlot (int slot)
 
     removeSlotNode (slot, UpdateKind::none);
     rewire();
+    markDirty();
     sendChangeMessage();
 }
 
@@ -288,6 +299,7 @@ void Engine::swapSlots (int a, int b)
     }
 
     rewire();
+    markDirty();
     sendChangeMessage();
 }
 
@@ -346,6 +358,7 @@ void Engine::moveSlot (int from, int to)
             s = oldToNew[(size_t) s];
 
     rewire();
+    markDirty();
     sendChangeMessage();
 }
 
@@ -465,6 +478,7 @@ void Engine::setSlotCustomName (int slot, const String& name)
         return;
 
     slots[(size_t) slot].customName = name.trim();
+    markDirty();
     sendChangeMessage();
 }
 
@@ -485,6 +499,7 @@ void Engine::setSlotKind (int slot, SlotKind kind)
         return;
 
     slots[(size_t) slot].kind = kind;
+    markDirty();
     sendChangeMessage();
 }
 
@@ -593,6 +608,7 @@ void Engine::setSlotUserBypass (int slot, bool bypassed)
 
     slots[(size_t) slot].userBypassed = bypassed;
     updateBypassStates();
+    markDirty();
     sendChangeMessage();
 }
 
@@ -639,6 +655,7 @@ void Engine::setButtonActive (int index, bool active)
 
     buttons[(size_t) index].active = active;
     updateBypassStates();
+    recoveryPending = true;
     sendChangeMessage();
 }
 
@@ -648,6 +665,7 @@ void Engine::setButtonLabel (int index, const String& label)
         return;
 
     buttons[(size_t) index].label = label.trim().toUpperCase();
+    markDirty();
     sendChangeMessage();
 }
 
@@ -662,6 +680,7 @@ void Engine::setButtonControlsSlot (int index, int slot, bool controls)
         b.slots.add (slot);
 
     updateBypassStates();
+    markDirty();
     sendChangeMessage();
 }
 
@@ -700,6 +719,12 @@ void Engine::enableAllMidiInputs()
 void Engine::timerCallback()
 {
     checkAudioHealth();
+
+    // un plugin ha cambiato parametri o stato (manopole nella sua finestra)
+    if (pluginStateChanged.exchange (false) && Time::getMillisecondCounter() > ignorePluginChangesUntil)
+        markDirty();
+
+    writeRecoveryIfNeeded();
 
     if (++timerTicks % 4 != 0)
         return;
@@ -885,6 +910,118 @@ void Engine::checkAudioHealth()
 }
 
 //==============================================================================
+// Modifiche non salvate e recupero
+void Engine::audioProcessorParameterChanged (AudioProcessor*, int, float)
+{
+    pluginStateChanged = true;   // qualsiasi thread: solo un flag, lo legge il timer
+}
+
+void Engine::audioProcessorChanged (AudioProcessor*, const ChangeDetails& details)
+{
+    if (details.parameterInfoChanged || details.programChanged || details.nonParameterStateChanged)
+        pluginStateChanged = true;
+}
+
+void Engine::listenTo (NodeID id)
+{
+    if (auto* node = graph.getNodeForId (id))
+        node->getProcessor()->addListener (this);
+}
+
+void Engine::markDirty()
+{
+    recoveryPending = true;
+
+    if (! dirty)
+    {
+        dirty = true;
+        sendChangeMessage();
+    }
+}
+
+void Engine::markClean()
+{
+    dirty = false;
+    recoveryPending = true;
+    pluginStateChanged = false;
+    // dopo un caricamento alcuni plugin segnalano parametri cambiati: non sono modifiche dell'utente
+    ignorePluginChangesUntil = Time::getMillisecondCounter() + 1500;
+}
+
+File Engine::getRecoveryFile() const
+{
+    return appProperties.getUserSettings()->getFile().getSiblingFile ("recovery.chainrig");
+}
+
+void Engine::writeRecoveryIfNeeded()
+{
+    const auto now = Time::getMillisecondCounter();
+
+    if (! recoveryPending || now - lastRecoveryWrite < 10000)
+        return;
+
+    auto state = createPresetState();
+    if (auto* obj = state.getDynamicObject())
+    {
+        obj->setProperty ("recoveryOf", currentPresetFile.getFullPathName());
+        obj->setProperty ("dirty", dirty);
+    }
+
+    getRecoveryFile().replaceWithText (JSON::toString (state));
+    recoveryPending = false;
+    lastRecoveryWrite = now;
+}
+
+bool Engine::restoreFromRecovery()
+{
+    const auto recovery = getRecoveryFile();
+    const auto loading = recovery.withFileExtension ("loading");
+
+    // Il ripristino precedente ha fatto chiudere ChainRig (un plugin va in crash): non riprovare
+    if (loading.existsAsFile())
+    {
+        loading.deleteFile();
+        recovery.deleteFile();
+        startupMessage = "Il ripristino della sessione precedente ha fatto chiudere ChainRig, quindi questa volta "
+                         "l'ho saltato. Probabilmente un plugin della catena va in crash: controlla l'ultimo preset.";
+        PluginScanner::log ("RECUPERO saltato: il tentativo precedente si era chiuso");
+        return false;
+    }
+
+    if (! recovery.existsAsFile())
+        return false;
+
+    // Se il ripristino si blocca, al prossimo avvio resta "loading" e lo saltiamo
+    const auto savedAt = recovery.getLastModificationTime();
+    recovery.moveFileTo (loading);
+
+    const var root = JSON::parse (loading);
+    if (! root.isObject())
+    {
+        loading.deleteFile();
+        return false;
+    }
+
+    String errors;
+    loadPresetState (root, errors, "recupero");
+    loading.deleteFile();
+
+    currentPresetFile = File (root["recoveryOf"].toString());
+    markClean();
+    dirty = (bool) root["dirty"];
+
+    startupMessage = "ChainRig si era chiuso in modo inatteso. Ho ripristinato la catena com'era alle "
+                   + savedAt.formatted ("%H:%M:%S") + ".";
+    if (dirty)
+        startupMessage << " C'erano modifiche non salvate: le ritrovi, ricordati di salvare.";
+    if (errors.isNotEmpty())
+        startupMessage << "\n\n" << errors;
+
+    PluginScanner::log ("RECUPERO ripristinata la sessione salvata alle " + savedAt.formatted ("%H:%M:%S"));
+    return true;
+}
+
+//==============================================================================
 // Preset: file JSON leggibili, uno per preset, nella cartella Documenti/ChainRig/Preset
 Array<File> Engine::getPresetFiles() const
 {
@@ -898,10 +1035,8 @@ String Engine::getCurrentPresetName() const
     return currentPresetFile == File() ? String ("(nuovo preset)") : currentPresetFile.getFileNameWithoutExtension();
 }
 
-bool Engine::savePreset (const File& fileIn)
+var Engine::createPresetState() const
 {
-    const auto file = fileIn.withFileExtension (presetExtension);
-
     auto root = std::make_unique<DynamicObject>();
     root->setProperty ("version", 1);
     root->setProperty ("bpm", getBpm());
@@ -949,12 +1084,20 @@ bool Engine::savePreset (const File& fileIn)
     }
     root->setProperty ("buttons", buttonList);
 
-    if (! file.replaceWithText (JSON::toString (var (root.release()))))
+    return var (root.release());
+}
+
+bool Engine::savePreset (const File& fileIn)
+{
+    const auto file = fileIn.withFileExtension (presetExtension);
+
+    if (! file.replaceWithText (JSON::toString (createPresetState())))
         return false;
 
     currentPresetFile = file;
     props().setValue ("lastPreset", file.getFullPathName());
     props().saveIfNeeded();
+    markClean();
     sendChangeMessage();
     return true;
 }
@@ -969,6 +1112,18 @@ bool Engine::loadPreset (const File& file, String& errors)
         return false;
     }
 
+    const bool ok = loadPresetState (root, errors, file.getFileNameWithoutExtension());
+
+    currentPresetFile = file;
+    props().setValue ("lastPreset", file.getFullPathName());
+    props().saveIfNeeded();
+    markClean();
+    sendChangeMessage();
+    return ok;
+}
+
+bool Engine::loadPresetState (const var& root, String& errors, const String& nameForLog)
+{
     const auto startMs = Time::getMillisecondCounterHiRes();
     setBpm (root.hasProperty ("bpm") ? (double) root["bpm"] : 120.0);
 
@@ -1090,6 +1245,7 @@ bool Engine::loadPreset (const File& file, String& errors)
         {
             slot.node = node->nodeID;
             slot.description = p.description;
+            listenTo (node->nodeID);
         }
         else
         {
@@ -1121,21 +1277,23 @@ bool Engine::loadPreset (const File& file, String& errors)
         }
     }
 
-    currentPresetFile = file;
-    props().setValue ("lastPreset", file.getFullPathName());
-    props().saveIfNeeded();
-
     rewire();
-    sendChangeMessage();
 
-    PluginScanner::log ("PRESET " + file.getFileNameWithoutExtension() + ": " + String (numReused) + " plugin riusati, "
+    PluginScanner::log ("PRESET " + nameForLog + ": " + String (numReused) + " plugin riusati, "
                         + String (numCreated) + " nuovi, " + String (Time::getMillisecondCounterHiRes() - startMs, 0) + " ms");
     return errors.isEmpty();
 }
 
 void Engine::setBpm (double bpm)
 {
-    playHead.bpm = jlimit (30.0, 300.0, bpm);
+    const double newBpm = jlimit (30.0, 300.0, bpm);
+
+    if (! approximatelyEqual (newBpm, playHead.bpm.load()))
+    {
+        playHead.bpm = newBpm;
+        markDirty();   // durante un caricamento markClean() lo annulla subito dopo
+    }
+
     sendChangeMessage();
 }
 
@@ -1166,5 +1324,6 @@ void Engine::newEmptyPreset()
 
     currentPresetFile = File();
     rewire();
+    markClean();
     sendChangeMessage();
 }

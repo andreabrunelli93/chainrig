@@ -244,14 +244,15 @@ void BigButton::mouseDown (const MouseEvent&)
 }
 
 //==============================================================================
-void PresetSelector::setPreset (const String& newName, int newNumber, int newTotal)
+void PresetSelector::setPreset (const String& newName, int newNumber, int newTotal, bool newUnsaved)
 {
-    if (newName == name && newNumber == number && newTotal == total)
+    if (newName == name && newNumber == number && newTotal == total && newUnsaved == unsaved)
         return;
 
     name = newName;
     number = newNumber;
     total = newTotal;
+    unsaved = newUnsaved;
     repaint();
 }
 
@@ -312,14 +313,30 @@ void PresetSelector::paint (Graphics& g)
     Icons::draw (g, Icons::Ui::next, Rectangle<float> (22.0f, 22.0f).withCentre ({ bounds.getRight() - 32.0f, bounds.getCentreY() }), Palette::text);
 
     auto text = bounds.reduced (84.0f, 10.0f);
+    auto topLine = text.removeFromTop (16.0f);
     g.setColour (Palette::textDim);
     g.setFont (Fonts::mono (11.0f));
-    g.drawText (number > 0 ? "PRESET " + twoDigits (number) + " / " + twoDigits (total) : String ("PRESET NON SALVATO"),
-                text.removeFromTop (16.0f), Justification::centredLeft);
+    const String position = number > 0 ? "PRESET " + twoDigits (number) + " / " + twoDigits (total) : String ("PRESET NUOVO");
+    g.drawText (position, topLine, Justification::centredLeft);
+
+    if (unsaved)
+    {
+        const float x = topLine.getX() + GlyphArrangement::getStringWidth (Fonts::mono (11.0f), position) + 10.0f;
+        g.setColour (Palette::accent);
+        g.drawText (String::fromUTF8 ("·  NON SALVATO"), topLine.withLeft (x), Justification::centredLeft);
+    }
+
+    auto nameArea = text;
+    if (unsaved)   // pallino ambra prima del nome
+    {
+        auto dot = nameArea.removeFromLeft (18.0f);
+        g.setColour (Palette::accent);
+        g.fillEllipse (Rectangle<float> (9.0f, 9.0f).withCentre ({ dot.getX() + 4.5f, dot.getCentreY() }));
+    }
 
     g.setColour (Palette::text);
     g.setFont (Fonts::display (22.0f));
-    g.drawFittedText (name.toUpperCase(), text.toNearestInt(), Justification::centredLeft, 1, 0.7f);
+    g.drawFittedText (name.toUpperCase(), nameArea.toNearestInt(), Justification::centredLeft, 1, 0.7f);
 }
 
 //==============================================================================
@@ -894,8 +911,8 @@ MainComponent::MainComponent (Engine& e) : engine (e)
                                                        &editButton, &settingsButton })
         addAndMakeVisible (c);
 
-    presetSelector.onPrev  = [this] { engine.loadAdjacentPreset (-1); };
-    presetSelector.onNext  = [this] { engine.loadAdjacentPreset (1); };
+    presetSelector.onPrev  = [this] { confirmPresetSwitch ([this] { engine.loadAdjacentPreset (-1); }); };
+    presetSelector.onNext  = [this] { confirmPresetSwitch ([this] { engine.loadAdjacentPreset (1); }); };
     presetSelector.onMenu  = [this] { showPresetMenu(); };
     tunerButton.onClick    = [this] { engine.setTunerActive (! engine.isTunerActive()); };
     editButton.onClick     = [this] { editMode = ! editMode; refresh(); };
@@ -920,6 +937,19 @@ MainComponent::MainComponent (Engine& e) : engine (e)
     refresh();
     updateStatus();
     startTimerHz (4);
+
+    // ripristino dopo una chiusura inattesa: avvisa quando la finestra è visibile
+    if (const auto message = engine.takeStartupMessage(); message.isNotEmpty())
+    {
+        SafePointer<MainComponent> safeThis (this);
+        MessageManager::callAsync ([safeThis, message]
+        {
+            if (safeThis != nullptr)
+                AlertWindow::showAsync (MessageBoxOptions::makeOptionsOk (MessageBoxIconType::InfoIcon,
+                                                                          "Sessione ripristinata", message),
+                                        nullptr);
+        });
+    }
 }
 
 MainComponent::~MainComponent()
@@ -1094,7 +1124,7 @@ void MainComponent::refresh()
 {
     const auto files = engine.getPresetFiles();
     const int number = files.indexOf (engine.getCurrentPresetFile()) + 1;
-    presetSelector.setPreset (engine.getCurrentPresetName(), number, files.size());
+    presetSelector.setPreset (engine.getCurrentPresetName(), number, files.size(), engine.hasUnsavedChanges());
 
     tunerButton.setToggleState (engine.isTunerActive(), dontSendNotification);
     editButton.setToggleState (editMode, dontSendNotification);
@@ -1356,17 +1386,11 @@ void MainComponent::showPresetMenu()
         }
         else if (result == saveAs)
         {
-            askText ("Salva preset come", engine.getCurrentPresetFile().getFileNameWithoutExtension(),
-                     [this] (String name)
-            {
-                const auto file = engine.getPresetFolder().getChildFile (File::createLegalFileName (name));
-                if (! engine.savePreset (file))
-                    showError ("Salvataggio non riuscito", file.getFullPathName());
-            });
+            saveCurrentPresetAs (nullptr);
         }
         else if (result == newPreset)
         {
-            engine.newEmptyPreset();
+            confirmPresetSwitch ([this] { engine.newEmptyPreset(); });
         }
         else if (result == tempo)
         {
@@ -1383,9 +1407,71 @@ void MainComponent::showPresetMenu()
         }
         else if (result >= presetBase && result - presetBase < files.size())
         {
-            String errors;
-            if (! engine.loadPreset (files[result - presetBase], errors))
-                showError ("Alcuni plugin non sono stati caricati", errors);
+            const auto file = files[result - presetBase];
+            confirmPresetSwitch ([this, file]
+            {
+                String errors;
+                if (! engine.loadPreset (file, errors))
+                    showError ("Alcuni plugin non sono stati caricati", errors);
+            });
+        }
+    });
+}
+
+void MainComponent::saveCurrentPresetAs (std::function<void()> afterSave)
+{
+    askText ("Salva preset come", engine.getCurrentPresetFile().getFileNameWithoutExtension(),
+             [this, afterSave] (String name)
+    {
+        const auto file = engine.getPresetFolder().getChildFile (File::createLegalFileName (name));
+        if (! engine.savePreset (file))
+            showError ("Salvataggio non riuscito", file.getFullPathName());
+        else if (afterSave != nullptr)
+            afterSave();
+    });
+}
+
+void MainComponent::confirmPresetSwitch (std::function<void()> switchPreset)
+{
+    if (! engine.hasUnsavedChanges())
+    {
+        switchPreset();
+        return;
+    }
+
+    const auto options = MessageBoxOptions()
+                             .withIconType (MessageBoxIconType::QuestionIcon)
+                             .withTitle ("Modifiche non salvate")
+                             .withMessage ("Il preset \"" + engine.getCurrentPresetName() + "\" ha modifiche non salvate.")
+                             .withButton ("Salva e cambia", 1)
+                             .withButton ("Cambia senza salvare", 2)
+                             .withButton ("Annulla", 0);
+
+    SafePointer<MainComponent> safeThis (this);
+    AlertWindow::showAsync (options, [safeThis, switchPreset] (int result)
+    {
+        if (safeThis == nullptr)
+            return;
+
+        if (result == 1)   // salva e cambia
+        {
+            const auto current = safeThis->engine.getCurrentPresetFile();
+
+            if (current.existsAsFile())
+            {
+                if (safeThis->engine.savePreset (current))
+                    switchPreset();
+                else
+                    safeThis->showError ("Salvataggio non riuscito", current.getFullPathName());
+            }
+            else
+            {
+                safeThis->saveCurrentPresetAs (switchPreset);   // preset nuovo: prima serve un nome
+            }
+        }
+        else if (result == 2)   // cambia senza salvare
+        {
+            switchPreset();
         }
     });
 }
