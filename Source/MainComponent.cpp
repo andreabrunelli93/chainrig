@@ -148,7 +148,7 @@ void SlotView::paint (Graphics& g)
     StringArray controllers;
     for (int b = 0; b < Engine::numButtons; ++b)
         if (engine.getButton (b).slots.contains (index))
-            controllers.add (engine.getButton (b).label.toUpperCase());
+            controllers.add ("PEDALE " + String (b + 1));
 
     String status = bypassed ? "BYPASS" : (active ? "ATTIVO" : "SPENTO");
     if (! controllers.isEmpty())
@@ -221,9 +221,9 @@ void BigButton::paint (Graphics& g)
 
     g.setColour (on ? Colour (0xfff6efe2) : Palette::textDim);
     g.setFont (Fonts::display (labelH));
-    g.drawFittedText (button.label.toUpperCase(),
+    g.drawFittedText (engine.getButtonDisplayName (index).toUpperCase(),
                       Rectangle<float> (bounds.getX() + 12.0f, y, bounds.getWidth() - 24.0f, labelH + 4.0f).toNearestInt(),
-                      Justification::centred, 1, 0.7f);
+                      Justification::centred, 1, 0.45f);
     y += labelH + 14.0f;
 
     String sub;
@@ -1148,8 +1148,8 @@ void MainComponent::showBigButtonEditMenu (int index)
     enum { renameId = 1, slotBase = 100 };
 
     PopupMenu menu;
-    menu.addSectionHeader ("Pulsante " + String (index + 1) + "  (MIDI CC " + String (engine.getButtonCC (index)) + ")");
-    menu.addItem (renameId, "Rinomina...");
+    menu.addSectionHeader ("Pedale " + String (index + 1) + "  (MIDI CC " + String (engine.getButtonCC (index)) + ")");
+    menu.addItem (renameId, "Nome quando non controlla posti (ora: " + button.label + ")...");
     menu.addSectionHeader ("Posti che accende/spegne");
 
     for (int s = 0; s < Engine::numSlots; ++s)
@@ -1163,7 +1163,7 @@ void MainComponent::showBigButtonEditMenu (int index)
     {
         if (result == renameId)
         {
-            askText ("Nome del pulsante", engine.getButton (index).label,
+            askText ("Nome del pedale quando non controlla posti", engine.getButton (index).label,
                      [this, index] (String text) { engine.setButtonLabel (index, text); });
         }
         else if (result >= slotBase)

@@ -13,6 +13,7 @@ Focusrite, driver ASIO). Lo sviluppo e le prove si fanno su un MacBook Pro con A
 - 4 pulsanti touch grandi che accendono o spengono i posti assegnati, comandabili anche da pedaliera MIDI (CC).
 - Preset in file JSON.
 - Bassa latenza (ASIO su Windows).
+- I pedali mostrano il nome dei posti che controllano (`getButtonDisplayName`). L'etichetta propria (BOOST...) compare solo se non controllano posti.
 - Rinominare i posti e sceglierne il tipo, che decide icona ed etichetta (aggiunto su richiesta dell'utente).
 - Barra laterale con il livello d'uscita e la spia CLIP, che resta accesa fino al tocco (aggiunta su richiesta dell'utente).
 - Pulsante REC: registra l'uscita in WAV nella cartella Download (aggiunto su richiesta dell'utente).

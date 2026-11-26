@@ -290,6 +290,25 @@ void Engine::swapSlots (int a, int b)
     sendChangeMessage();
 }
 
+String Engine::getButtonDisplayName (int index) const
+{
+    if (! isPositiveAndBelow (index, numButtons))
+        return {};
+
+    const auto& button = buttons[(size_t) index];
+    auto sorted = button.slots;
+    sorted.sort();
+
+    StringArray names;
+    for (auto s : sorted)
+        if (! isSlotEmpty (s))
+            names.add (getSlotName (s));
+
+    if (names.isEmpty())   return button.label;
+    if (names.size() <= 2) return names.joinIntoString (" + ");
+    return names[0] + " + " + String (names.size() - 1);
+}
+
 void Engine::moveSlot (int from, int to)
 {
     if (! isPositiveAndBelow (from, numSlots) || ! isPositiveAndBelow (to, numSlots) || from == to || isSlotEmpty (from))

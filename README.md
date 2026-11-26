@@ -79,7 +79,7 @@ nella barra in alto. Se cambi la scheda audio mentre registri, la registrazione 
    come escluso e ChainRig continua. Il dettaglio è in `scan.log`, accanto alle impostazioni.
    **Avanzate...** apre la lista completa di JUCE, che serve per aggiungere altre cartelle.
 4. Tocca un posto vuoto → **Scegli plugin**. Per esempio NAM nel posto 3, un caricatore di IR nel 4, Valhalla nel 7.
-5. **MODIFICA** → tocca un pulsante grande per rinominarlo e scegliere i posti che controlla. Poi tocca di nuovo **MODIFICA** per uscire.
+5. **MODIFICA** → tocca un pedale grande per scegliere i posti che controlla. Il pedale prende il nome di quei posti (per esempio "KLONE CENTAUR" o "KLONE + DELAY"), quindi per cambiarlo rinomina il posto. Il nome proprio del pedale (BOOST, DRIVE...) compare solo quando non controlla posti. Poi tocca di nuovo **MODIFICA** per uscire.
 6. Tocca il nome del preset → **Salva come...**
 
 Per il palco: **IMPOSTAZIONI → Schermo intero**. Poi metti un collegamento a `ChainRig.exe` nella cartella di avvio automatico di Windows: premi Win+R e scrivi `shell:startup`. Così il programma parte già a schermo intero sull'ultimo preset.

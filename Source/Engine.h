@@ -86,6 +86,10 @@ public:
     //==============================================================================
     // Pulsanti touch / MIDI
     const TouchButton& getButton (int index) const;
+
+    /** Nome mostrato sul pedale: quello dei posti che controlla ("Klone", "Klone + Delay",
+        "Klone + 2"); se non controlla posti pieni, la sua etichetta (BOOST, DRIVE...). */
+    juce::String getButtonDisplayName (int index) const;
     void toggleButton (int index);
     void setButtonActive (int index, bool active);
     void setButtonLabel (int index, const juce::String& label);
