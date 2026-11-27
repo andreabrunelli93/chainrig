@@ -103,11 +103,16 @@ target_sources(ChainRig PRIVATE
     Source/Pedals/Pedals.cpp
     Source/Pedals/Pedals.h
     Source/Pedals/TransparentDrive.cpp
+    Source/Pedals/TapeEcho.cpp
+    Source/Pedals/TapeEcho.h
+    Source/Pedals/TapeHysteresis.h
     Source/Pedals/TapeMachine.cpp
     Source/Pedals/TapeMachine.h
     Source/Pedals/TransparentDrive.h
     Source/Pedals/VcaCompressor.cpp
     Source/Pedals/VcaCompressor.h
+    Source/Pedals/VcaTremolo.cpp
+    Source/Pedals/VcaTremolo.h
     Source/PluginChooser.cpp
     Source/PluginChooser.h
     Source/PluginScanner.h
@@ -158,7 +163,9 @@ if(CHAINRIG_PEDAL_LAB)
         Source/Pedals/OpAmpOverdrive.cpp
         Source/Pedals/OtaCompressor.cpp
         Source/Pedals/TransparentDrive.cpp
+        Source/Pedals/TapeEcho.cpp
         Source/Pedals/TapeMachine.cpp
+        Source/Pedals/VcaTremolo.cpp
         Source/Pedals/VcaCompressor.cpp)
     target_compile_definitions(pedal_lab_render PRIVATE
         JUCE_WEB_BROWSER=0
@@ -187,7 +194,9 @@ if(CHAINRIG_PEDAL_LAB)
         Source/Pedals/OpAmpOverdrive.cpp
         Source/Pedals/OtaCompressor.cpp
         Source/Pedals/TransparentDrive.cpp
+        Source/Pedals/TapeEcho.cpp
         Source/Pedals/TapeMachine.cpp
+        Source/Pedals/VcaTremolo.cpp
         Source/Pedals/VcaCompressor.cpp)
     target_compile_definitions(pedal_snapshot PRIVATE
         JUCE_WEB_BROWSER=0

@@ -6,6 +6,8 @@
 #include "StereoChorus.h"
 #include "VcaCompressor.h"
 #include "TapeMachine.h"
+#include "TapeEcho.h"
+#include "VcaTremolo.h"
 
 namespace Pedals
 {
@@ -19,7 +21,9 @@ namespace Pedals
             { OpAmpOverdrive::getInfo(),   [] { return std::make_unique<OpAmpOverdrive>(); } },
             { BbdChorus::getInfo(),        [] { return std::make_unique<BbdChorus>(); } },
             { StereoChorus::getInfo(),     [] { return std::make_unique<StereoChorus>(); } },
+            { VcaTremolo::getInfo(),       [] { return std::make_unique<VcaTremolo>(); } },
             { TapeMachine::getInfo(),      [] { return std::make_unique<TapeMachine>(); } },
+            { TapeEcho::getInfo(),         [] { return std::make_unique<TapeEcho>(); } },
         };
         return entries;
     }

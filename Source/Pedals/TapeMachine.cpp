@@ -1,17 +1,12 @@
 #include "TapeMachine.h"
 #include "Artwork.h"
+#include "TapeHysteresis.h"
 
 using namespace juce;
 
 namespace
 {
     constexpr double pi = MathConstants<double>::pi;
-
-    // nastro (Jiles-Atherton), valori dell'articolo DAFx 2019
-    constexpr double Ms = 3.5e5;      // magnetizzazione di saturazione
-    constexpr double aShape = 2.2e4;  // forma della curva anisteretica
-    constexpr double alpha = 1.6e-3;  // accoppiamento tra domini
-    constexpr double kPin = 2.7e4;    // larghezza del ciclo (pinning)
 
     // DRIVE: campo H per 1.0 digitale; 2,8 dB per tacca, 5 = 1e5 (saturazione morbida sui picchi
     // forti a -6 dBFS), 10 = satura già a -18 dBFS. Il livello è compensato (DRIVE non alza il volume
@@ -38,32 +33,6 @@ namespace
     constexpr double wowDepth = 0.0025, wowHz = 0.7;
     constexpr double flutterDepth = 0.0008, flutterHz = 11.0;
     constexpr double maxDelaySeconds = 0.003;
-
-    /** Funzione di Langevin L(x) = coth(x) - 1/x e la sua derivata, con un solo exp:
-        coth x = (e + 1) / (e - 1), 1 / sinh² x = 4 e / (e - 1)², e = exp(2x).
-        Vicino a zero (cancellazione) la serie di Taylor. */
-    inline void langevin (double x, double& value, double& slope) noexcept
-    {
-        if (std::abs (x) < 1e-2)
-        {
-            const double x2 = x * x;
-            value = x / 3.0 - x * x2 / 45.0 + 2.0 * x * x2 * x2 / 945.0;
-            slope = 1.0 / 3.0 - x2 / 15.0 + 2.0 * x2 * x2 / 189.0;
-            return;
-        }
-        const double ax = jmin (std::abs (x), 300.0);
-        const double e = std::exp (2.0 * ax), em1 = e - 1.0, inv = 1.0 / ax;
-        const double coth = (e + 1.0) / em1;
-        value = std::copysign (coth - inv, x);
-        slope = inv * inv - 4.0 * e / (em1 * em1);
-    }
-
-    // pendenza a piccolo segnale della parte reversibile (con l'accoppiamento): compensazione del livello
-    inline double smallSignalSlope (double c) noexcept
-    {
-        const double chi = Ms / (3.0 * aShape);
-        return c * chi / (1.0 - c * alpha * chi);
-    }
 
     // scaffale del primo ordine: guadagno 1 in basso, `top` in alto, transizione a 1 / (2 pi tau)
     void designShelf (double tau, double top, double rate, double& b0, double& b1, double& a1)
@@ -120,8 +89,7 @@ void TapeMachine::prepareCircuit (double rate)
         s->setCurrentAndTargetValue (p->get());
     }
 
-    magnetisation = 0.0;
-    lastField = 0.0;
+    tape.prepare (rate);
     fieldScale = readScale = outputGain = 0.0;   // ricalcolati al primo campione
 
     // blocco della continua a 5 Hz (l'isteresi lascia una magnetizzazione residua)
@@ -198,46 +166,6 @@ void TapeMachine::setSpeed (int index)
     }
 }
 
-double TapeMachine::hysteresisDerivative (double h, double hDot, double m) const noexcept
-{
-    const double q = (h + alpha * m) / aShape;
-    double value, slope;
-    langevin (q, value, slope);
-    const double anhysteretic = Ms * value;
-    const double diff = anhysteretic - m;
-    const double delta = hDot >= 0.0 ? 1.0 : -1.0;
-    const double deltaM = diff * delta > 0.0 ? 1.0 : 0.0;   // solo se M va verso la curva anisteretica
-
-    const double irreversible = (1.0 - c) * deltaM * diff / ((1.0 - c) * delta * kPin - alpha * diff);
-    const double reversible = c * (Ms / aShape) * slope;
-    return hDot * (irreversible + reversible) / (1.0 - c * alpha * (Ms / aShape) * slope);
-}
-
-double TapeMachine::processHysteresis (double h) noexcept
-{
-    // Runge-Kutta 4 con H lineare dentro il passo
-    const double T = 1.0 / sampleRate;
-    const double hDot = (h - lastField) * sampleRate;
-    const double hMid = 0.5 * (h + lastField);
-    const double m = magnetisation;
-
-    const double k1 = hysteresisDerivative (lastField, hDot, m);
-    const double k2 = hysteresisDerivative (hMid, hDot, m + 0.5 * T * k1);
-    const double k3 = hysteresisDerivative (hMid, hDot, m + 0.5 * T * k2);
-    const double k4 = hysteresisDerivative (h, hDot, m + T * k3);
-    double next = m + T / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
-
-    if (! std::isfinite (next) || std::abs (next) > 1.5 * Ms)
-    {
-        next = jlimit (-Ms, Ms, std::isfinite (next) ? next : 0.0);
-        ++resets;
-    }
-
-    magnetisation = next;
-    lastField = h;
-    return next;
-}
-
 double TapeMachine::readDelay (double d) const noexcept
 {
     // Hermite a 4 punti sul ritardo frazionario (d >= 1 campione)
@@ -268,19 +196,19 @@ void TapeMachine::processCircuit (float* samples, int n)
             fieldScale = fieldGain (driveSmoothed.getNextValue());
         if (biasSmoothed.isSmoothing() || readScale <= 0.0)
         {
-            c = reversibility (biasSmoothed.getNextValue());
+            tape.setReversibility (reversibility (biasSmoothed.getNextValue()));
             readScale = 0.0;
         }
         if (readScale <= 0.0 || driveSmoothed.isSmoothing())
-            readScale = 1.0 / (smallSignalSlope (c) * fieldScale);
+            readScale = 1.0 / (TapeHysteresis::smallSignalSlope (tape.getReversibility()) * fieldScale);
         if (levelSmoothed.isSmoothing() || outputGain <= 0.0)
             outputGain = Decibels::decibelsToGain (-12.0 + 2.4 * levelSmoothed.getNextValue());
         const double g = fieldScale;
 
         // registrazione: enfasi degli acuti, campo, nastro
         const double h = preEmphasis.process ((double) samples[i]) * g;
-        const double m = processHysteresis (h);
-        peakMagnetisation = jmax (peakMagnetisation, std::abs (m) / Ms);
+        const double m = tape.process (h);
+        peakMagnetisation = jmax (peakMagnetisation, std::abs (m) / TapeHysteresis::Ms);
 
         // lettura: livello compensato (pendenza iniziale), de-enfasi, perdite della testina, head bump
         double y = deEmphasis.process (m * readScale);
@@ -321,5 +249,5 @@ void TapeMachine::processCircuit (float* samples, int n)
 
 String TapeMachine::getDiagnostics() const
 {
-    return "magnetizzazione massima " + String (peakMagnetisation * 100.0, 1) + "% di Ms, correzioni " + String (resets);
+    return "magnetizzazione massima " + String (peakMagnetisation * 100.0, 1) + "% di Ms, correzioni " + String (tape.corrections);
 }

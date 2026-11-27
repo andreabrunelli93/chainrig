@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PedalProcessor.h"
+#include "TapeHysteresis.h"
 
 //==============================================================================
 /** Saturazione di nastro con un modello fisico (non un circuito):
@@ -53,8 +54,6 @@ private:
     static constexpr int firLength = 31;   // a 2x: risoluzione ~3 kHz, la curva delle perdite è liscia
 
     void setSpeed (int index);
-    double hysteresisDerivative (double h, double hDot, double m) const noexcept;
-    double processHysteresis (double h) noexcept;
     double readDelay (double delaySamples) const noexcept;
 
     BuiltInParameter* drive = nullptr;
@@ -68,7 +67,7 @@ private:
     int currentSpeed = -1;
 
     // isteresi
-    double c = 0.17, magnetisation = 0.0, lastField = 0.0;
+    TapeHysteresis tape;
     double fieldScale = 0.0, readScale = 0.0, outputGain = 0.0;   // dalle manopole
 
     // filtri
@@ -86,5 +85,4 @@ private:
 
     // diagnostica
     double peakMagnetisation = 0.0;
-    int resets = 0;
 };
