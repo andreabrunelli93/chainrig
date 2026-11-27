@@ -77,8 +77,21 @@ target_sources(ChainRig PRIVATE
     Source/MainComponent.cpp
     Source/Look.cpp
     Source/Look.h
+    Source/BuiltInParameter.h
+    Source/BuiltIns.cpp
+    Source/BuiltIns.h
     Source/NamProcessor.cpp
     Source/NamProcessor.h
+    Source/Pedals/Artwork.cpp
+    Source/Pedals/Artwork.h
+    Source/Pedals/CircuitModel.h
+    Source/Pedals/PedalEditor.cpp
+    Source/Pedals/PedalProcessor.cpp
+    Source/Pedals/PedalProcessor.h
+    Source/Pedals/Pedals.cpp
+    Source/Pedals/Pedals.h
+    Source/Pedals/TransparentDrive.cpp
+    Source/Pedals/TransparentDrive.h
     Source/PluginChooser.cpp
     Source/PluginChooser.h
     Source/PluginScanner.h
@@ -113,3 +126,62 @@ target_link_libraries(ChainRig
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# Strumento di prova dei pedali integrati (render offline e tempo per blocco), fuori dalla CI:
+# cmake -B build -DCHAINRIG_PEDAL_LAB=ON && cmake --build build --target pedal_lab_render
+option(CHAINRIG_PEDAL_LAB "Compila pedal_lab_render" OFF)
+if(CHAINRIG_PEDAL_LAB)
+    juce_add_console_app(pedal_lab_render PRODUCT_NAME "pedal_lab_render")
+    target_sources(pedal_lab_render PRIVATE
+        Tools/PedalLabRender.cpp
+        Source/Pedals/PedalProcessor.cpp
+        Source/Pedals/Artwork.cpp
+        Source/Pedals/Pedals.cpp
+        Source/Pedals/TransparentDrive.cpp)
+    target_compile_definitions(pedal_lab_render PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_APPLICATION_VERSION_STRING="lab")
+    target_link_libraries(pedal_lab_render
+        PRIVATE
+            juce::juce_audio_formats
+            juce::juce_audio_processors
+            juce::juce_dsp
+        PUBLIC
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_warning_flags)
+
+    # La finestra di un pedale disegnata in un PNG, senza aprire l'app
+    juce_add_console_app(pedal_snapshot PRODUCT_NAME "pedal_snapshot")
+    target_sources(pedal_snapshot PRIVATE
+        Tools/PedalSnapshot.cpp
+        Source/Look.cpp
+        Source/Pedals/Artwork.cpp
+        Source/Pedals/PedalEditor.cpp
+        Source/Pedals/PedalProcessor.cpp
+        Source/Pedals/Pedals.cpp
+        Source/Pedals/TransparentDrive.cpp)
+    target_compile_definitions(pedal_snapshot PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_APPLICATION_VERSION_STRING="lab")
+    target_link_libraries(pedal_snapshot
+        PRIVATE
+            juce::juce_audio_utils
+            juce::juce_dsp
+        PUBLIC
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_warning_flags)
+
+    # Una cattura NAM offline in volt veri, per confrontarla con un pedale integrato
+    juce_add_console_app(nam_render PRODUCT_NAME "nam_render")
+    target_sources(nam_render PRIVATE Tools/NamRender.cpp)
+    target_compile_definitions(nam_render PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    target_link_libraries(nam_render
+        PRIVATE
+            nam_core
+            juce::juce_audio_formats
+        PUBLIC
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_warning_flags)
+endif()

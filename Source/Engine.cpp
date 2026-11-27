@@ -1,6 +1,6 @@
 #include "Engine.h"
 #include "PluginScanner.h"
-#include "NamProcessor.h"
+#include "BuiltIns.h"
 
 using namespace juce;
 
@@ -198,7 +198,7 @@ Engine::Engine()
     appProperties.setStorageParameters (options);
 
     addDefaultFormatsToManager (formatManager);
-    formatManager.addFormat (std::make_unique<BuiltInPluginFormat>());   // posti integrati (NAM)
+    formatManager.addFormat (std::make_unique<BuiltInPluginFormat>());   // posti integrati (NAM, pedali)
 
     if (auto xml = props().getXmlValue ("pluginList"))
         knownPlugins.recreateFromXml (*xml);

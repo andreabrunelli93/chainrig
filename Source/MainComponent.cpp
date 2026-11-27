@@ -1,5 +1,6 @@
 #include "MainComponent.h"
 #include "NamProcessor.h"
+#include "BuiltIns.h"
 #include "PluginChooser.h"
 #include "SetlistEditor.h"
 #include "BinaryData.h"
@@ -1263,13 +1264,28 @@ void MainComponent::showSlotMenu (int slot)
     const auto types = engine.knownPlugins.getTypes();
     const bool empty = engine.isSlotEmpty (slot);
 
-    enum { openEditor = 1, toggleBypass, renameSlot, moveLeft, moveRight, removePlugin, scanPlugins, builtInNam, kindBase = 200 };
+    enum { openEditor = 1, toggleBypass, renameSlot, moveLeft, moveRight, removePlugin, scanPlugins,
+           builtInBase = 100, kindBase = 200 };
 
-    // prima i posti integrati, poi i plugin della lista
+    // effetti integrati (NAM, pedali) in un menu a parte, divisi per categoria
+    PopupMenu builtInMenu;
+    {
+        const auto& builtIns = BuiltIns::all();
+        StringArray categories;
+        for (auto& e : builtIns)
+            categories.addIfNotAlreadyThere (e.menuCategory);
+
+        for (auto& category : categories)
+        {
+            PopupMenu sub;
+            for (int i = 0; i < (int) builtIns.size(); ++i)
+                if (builtIns[(size_t) i].menuCategory == category)
+                    sub.addItem (builtInBase + i, builtIns[(size_t) i].description.name);
+            builtInMenu.addSubMenu (category, sub);
+        }
+    }
+
     PopupMenu pluginMenu;
-    pluginMenu.addSectionHeader ("Built-in");
-    pluginMenu.addItem (builtInNam, "NAM: capture + IR");
-    pluginMenu.addSectionHeader ("Plugins");
     if (types.isEmpty())
         pluginMenu.addItem (scanPlugins, "No plugins in the list: choose plugins...");
     else
@@ -1280,6 +1296,7 @@ void MainComponent::showSlotMenu (int slot)
 
     if (empty)
     {
+        menu.addSubMenu ("Built-in effects", builtInMenu);
         menu.addSubMenu ("Choose plugin", pluginMenu);
     }
     else
@@ -1299,7 +1316,8 @@ void MainComponent::showSlotMenu (int slot)
         menu.addItem (renameSlot, "Rename...");
         menu.addSubMenu ("Type: " + Engine::getSlotKindName (engine.getSlotKind (slot)), kindMenu);
         menu.addSeparator();
-        menu.addSubMenu ("Replace with", pluginMenu);
+        menu.addSubMenu ("Replace with built-in effect", builtInMenu);
+        menu.addSubMenu ("Replace with plugin", pluginMenu);
         menu.addItem (moveLeft,  "Move left", slot > 0);
         menu.addItem (moveRight, "Move right",   slot < Engine::numSlots - 1);
         menu.addSeparator();
@@ -1321,17 +1339,18 @@ void MainComponent::showSlotMenu (int slot)
             return;
         }
 
-        if (result == builtInNam)
+        if (const int b = result - builtInBase; b >= 0 && b < (int) BuiltIns::all().size())
         {
+            const auto& d = BuiltIns::all()[(size_t) b].description;
             String error;
-            if (engine.loadPluginIntoSlot (slot, NamProcessor::getDescription(), error))
-                openPluginWindow (engine.getSlotProcessor (slot));   // vuoto: si sceglie subito la cattura
-            else
-                showError ("Could not load the plugin", "NAM\n\n" + error);
+            if (! engine.loadPluginIntoSlot (slot, d, error))
+                showError ("Could not load the plugin", d.name + "\n\n" + error);
+            else if (d.fileOrIdentifier == NamProcessor::identifier)
+                openPluginWindow (engine.getSlotProcessor (slot));   // NAM vuoto: si sceglie subito la cattura
             return;
         }
 
-                if (result >= kindBase && result <= kindBase + (int) Engine::SlotKind::fx)
+        if (result >= kindBase && result <= kindBase + (int) Engine::SlotKind::fx)
         {
             engine.setSlotKind (slot, (Engine::SlotKind) (result - kindBase));
             return;
