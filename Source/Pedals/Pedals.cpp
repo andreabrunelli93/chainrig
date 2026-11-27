@@ -1,5 +1,11 @@
 #include "Pedals.h"
 #include "TransparentDrive.h"
+#include "OtaCompressor.h"
+#include "OpAmpOverdrive.h"
+#include "BbdChorus.h"
+#include "StereoChorus.h"
+#include "VcaCompressor.h"
+#include "TapeMachine.h"
 
 namespace Pedals
 {
@@ -8,6 +14,12 @@ namespace Pedals
         static const std::vector<Entry> entries
         {
             { TransparentDrive::getInfo(), [] { return std::make_unique<TransparentDrive>(); } },
+            { OtaCompressor::getInfo(),    [] { return std::make_unique<OtaCompressor>(); } },
+            { VcaCompressor::getInfo(),    [] { return std::make_unique<VcaCompressor>(); } },
+            { OpAmpOverdrive::getInfo(),   [] { return std::make_unique<OpAmpOverdrive>(); } },
+            { BbdChorus::getInfo(),        [] { return std::make_unique<BbdChorus>(); } },
+            { StereoChorus::getInfo(),     [] { return std::make_unique<StereoChorus>(); } },
+            { TapeMachine::getInfo(),      [] { return std::make_unique<TapeMachine>(); } },
         };
         return entries;
     }

@@ -636,6 +636,17 @@ PluginWindow::PluginWindow (AudioProcessor& processor, std::function<void()> clo
     setVisible (true);
 }
 
+PluginWindow::~PluginWindow()
+{
+    // JUCE vuole che chi ospita l'editor lo stacchi dal processore prima di cancellarlo: senza,
+    // il processore crede di averne ancora uno attivo e alla riapertura createEditorAndMakeActive()
+    // restituisce nullptr (si vedeva l'editor generico)
+    if (auto* editor = dynamic_cast<AudioProcessorEditor*> (getContentComponent()))
+        editor->processor.editorBeingDeleted (editor);
+
+    clearContentComponent();
+}
+
 void PluginWindow::closeButtonPressed()
 {
     if (onClose != nullptr)

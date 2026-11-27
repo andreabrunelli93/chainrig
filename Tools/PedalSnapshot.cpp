@@ -35,7 +35,7 @@ int main (int argc, char* argv[])
     auto pedal = entry->create();
     for (auto& a : args)
         if (a.contains ("="))
-            for (auto* k : pedal->getKnobs())
+            for (auto* k : pedal->getControls())
                 if (k->getParameterID() == a.upToFirstOccurrenceOf ("=", false, false))
                     k->set (a.fromFirstOccurrenceOf ("=", false, false).getFloatValue());
 

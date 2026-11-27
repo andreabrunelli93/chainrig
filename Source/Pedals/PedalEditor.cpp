@@ -72,6 +72,96 @@ namespace
 }
 
 //==============================================================================
+/** Interruttore del pedale: pulsante inciso con la spia, colori del pedale. */
+class PedalSwitch final : public Button
+{
+public:
+    PedalSwitch (const String& text, const PedalProcessor::Look& l) : Button (text), look (l)
+    {
+        setClickingTogglesState (true);
+    }
+
+    void paintButton (Graphics& g, bool isMouseOver, bool isDown) override
+    {
+        const auto r = getLocalBounds().toFloat().reduced (1.0f);
+        g.setColour (look.enclosureBottom);   // pieno: l'usura del corpo non deve vedersi sotto la scritta
+        g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+        g.setColour (Colours::black.withAlpha (isDown ? 0.45f : 0.3f));
+        g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+        g.setColour (look.ink.withAlpha (isMouseOver ? 0.9f : 0.6f));
+        g.drawRoundedRectangle (r, r.getHeight() * 0.5f, 1.2f);
+
+        const bool on = getToggleState();
+        const auto led = juce::Rectangle<float> (10.0f, 10.0f).withCentre ({ r.getX() + 20.0f, r.getCentreY() });
+        if (on)
+        {
+            g.setColour (look.led.withAlpha (0.35f));
+            g.fillEllipse (led.expanded (4.0f));
+        }
+        g.setColour (on ? look.led : Colours::black.withAlpha (0.5f));
+        g.fillEllipse (led);
+
+        g.setColour (look.ink);
+        g.setFont (Fonts::display (14.0f));
+        g.drawText (getButtonText().toUpperCase(), r.withTrimmedLeft (34.0f).withTrimmedRight (12.0f), Justification::centred);
+    }
+
+private:
+    PedalProcessor::Look look;
+};
+
+//==============================================================================
+/** Selettore a più posizioni: stesso pulsante inciso, scritta "NOME VALORE"; un clic passa alla
+    posizione dopo (dall'ultima torna alla prima). */
+class PedalSelector final : public Button
+{
+public:
+    PedalSelector (const PedalProcessor::Selector& s, const PedalProcessor::Look& l)
+        : Button (s.parameter->getName (32)), selector (s), look (l) {}
+
+    void paintButton (Graphics& g, bool isMouseOver, bool isDown) override
+    {
+        const auto r = getLocalBounds().toFloat().reduced (1.0f);
+        g.setColour (look.enclosureBottom);   // pieno: l'usura del corpo non deve vedersi sotto la scritta
+        g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+        g.setColour (Colours::black.withAlpha (isDown ? 0.45f : 0.3f));
+        g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+        g.setColour (look.ink.withAlpha (isMouseOver ? 0.9f : 0.6f));
+        g.drawRoundedRectangle (r, r.getHeight() * 0.5f, 1.2f);
+
+        auto text = r.reduced (14.0f, 0.0f);
+        g.setColour (look.ink.withAlpha (0.7f));
+        g.setFont (Fonts::display (14.0f));
+        g.drawText (getButtonText().toUpperCase(), text, Justification::centredLeft);
+        g.setColour (look.ink);
+        g.setFont (Fonts::mono (16.0f));
+        shown = selector.getIndex();
+        g.drawText (selector.choices[shown], text, Justification::centredRight);
+    }
+
+    void clicked() override
+    {
+        auto* p = selector.parameter;
+        p->beginChangeGesture();
+        p->set ((float) ((selector.getIndex() + 1) % selector.choices.size()));
+        p->endChangeGesture();
+        repaint();
+    }
+
+    /** Dal timer della finestra: ridisegna solo se la posizione è cambiata da fuori (preset, MIDI). */
+    void sync()
+    {
+        if (selector.getIndex() != shown)
+            repaint();
+    }
+
+private:
+    PedalProcessor::Selector selector;
+    PedalProcessor::Look look;
+    int shown = -1;
+};
+
+//==============================================================================
 /** Finestra di un pedale integrato, disegnata come un pedale: corpo, spia, manopole 0-10 in fila
     con le tacche incise, disegno facoltativo, nome; facoltativamente consumato dall'uso.
     I colori vengono da PedalProcessor::Info::look. Tutto ciò che non cambia (corpo, scritte, usura)
@@ -105,8 +195,25 @@ public:
             addAndMakeVisible (knob);
         }
 
+        for (auto* param : pedal.getSwitches())
+        {
+            auto* sw = switches.add (new PedalSwitch (param->getName (32), look));
+            sw->setToggleState (param->isOn(), dontSendNotification);
+            sw->onClick = [param, sw]
+            {
+                param->beginChangeGesture();
+                param->set (sw->getToggleState() ? 1.0f : 0.0f);
+                param->endChangeGesture();
+            };
+            addAndMakeVisible (sw);
+        }
+
+        for (auto& s : pedal.getSelectors())
+            addAndMakeVisible (selectors.add (new PedalSelector (s, look)));
+
         startTimerHz (10);   // parametri cambiati da fuori (preset, MIDI)
-        setSize (jmax (640, 150 * knobs.size() + 260), look.emblem.empty() ? 590 : 720);
+        setSize (look.width > 0 ? look.width : jmax (640, 150 * knobs.size() + 260),
+                 look.height > 0 ? look.height : (look.emblem.empty() && ! look.footPlate ? 590 : 720));
     }
 
     ~PedalEditor() override
@@ -141,8 +248,43 @@ public:
 
         for (int i = 0; i < knobs.size(); ++i)
         {
-            const int cx = (int) (body.getX() + 25.0f + step * ((float) i + 0.5f));
-            knobs[i]->setBounds (cx - size / 2, y, size, size);
+            if (i < (int) look.knobPlaces.size())
+            {
+                const auto& place = look.knobPlaces[(size_t) i];
+                const int s = roundToInt (place.size);
+                const int cx = (int) (body.getX() + place.x * body.getWidth());
+                knobs[i]->setBounds (cx - s / 2, (int) (body.getY() + place.top), s, s);
+            }
+            else
+            {
+                const int cx = (int) (body.getX() + 25.0f + step * ((float) i + 0.5f));
+                knobs[i]->setBounds (cx - size / 2, y, size, size);
+            }
+        }
+
+        // selettori e interruttori in fila in basso al centro, sopra il bordo del corpo
+        {
+            Array<Component*> row;
+            for (auto* s : selectors) row.add (s);
+            for (auto* s : switches)  row.add (s);
+            const int w = selectors.isEmpty() ? 150 : 170, h = 40, gap = 16;
+            const int total = row.size() * w + jmax (0, row.size() - 1) * gap;
+            int x = (int) body.getCentreX() - total / 2;
+            for (auto* sw : row)
+            {
+                sw->setBounds (x, (int) body.getBottom() - 78, w, h);
+                x += w + gap;
+            }
+        }
+
+        // placca: dal fondo delle etichette in giù, lasciando spazio al nome
+        if (look.footPlate)
+        {
+            float bottom = 0.0f;
+            for (auto* k : knobs)
+                bottom = jmax (bottom, (float) k->getBottom() - body.getY());
+            nameTop = bottom + 62.0f;
+            plate = body.withTrimmedTop (nameTop + 112.0f).reduced (44.0f, 0.0f).withTrimmedBottom (40.0f);
         }
 
         renderEnclosure();
@@ -233,6 +375,22 @@ private:
             g.setColour (Colours::black.withAlpha (0.45f));
             g.drawEllipse (screw, 0.8f);
             g.drawLine (screw.getX() + 3.0f, screw.getCentreY(), screw.getRight() - 3.0f, screw.getCentreY(), 1.2f);
+        }
+
+        if (look.footPlate && ! plate.isEmpty())
+        {
+            // fessura scura attorno, poi la placca con smusso chiaro in alto e ombra in basso
+            g.setColour (Colours::black.withAlpha (0.45f));
+            g.fillRoundedRectangle (plate.expanded (5.0f), 12.0f);
+            g.setGradientFill (ColourGradient (look.enclosureTop.brighter (0.08f), plate.getX(), plate.getY(),
+                                               look.enclosureBottom.darker (0.15f), plate.getX(), plate.getBottom(), false));
+            g.fillRoundedRectangle (plate, 9.0f);
+            g.setColour (Colours::white.withAlpha (0.35f));
+            g.drawLine (plate.getX() + 10.0f, plate.getY() + 1.5f, plate.getRight() - 10.0f, plate.getY() + 1.5f, 1.5f);
+            g.setColour (Colours::black.withAlpha (0.35f));
+            g.drawLine (plate.getX() + 10.0f, plate.getBottom() - 1.5f, plate.getRight() - 10.0f, plate.getBottom() - 1.5f, 2.0f);
+            g.setColour (Colours::black.withAlpha (0.18f));
+            g.drawRoundedRectangle (plate.reduced (10.0f), 6.0f, 1.0f);   // bordo dello stampo
         }
 
         // spia accesa (la finestra è aperta solo sui posti caricati)
@@ -380,7 +538,7 @@ private:
             g.drawText (s, area, Justification::centred);
         };
 
-        float top = 310.0f;
+        float top = look.nameTop > 0.0f ? look.nameTop : 310.0f;
         if (! look.emblem.empty())
         {
             const auto area = juce::Rectangle<float> (230.0f, 200.0f).withCentre ({ body.getCentreX(), body.getY() + 375.0f });
@@ -396,6 +554,15 @@ private:
             for (auto& part : look.emblem.cuts)
                 g.fillPath (part, fit);
             top = 490.0f;
+        }
+
+        if (look.footPlate)
+        {
+            auto text = body.withTrimmedTop (nameTop).reduced (30.0f, 0.0f);
+            engrave (pedal.getInfo().name.toUpperCase(), text.removeFromTop (54.0f), Fonts::display (44.0f));
+            if (look.subtitle.isNotEmpty())
+                engrave (look.subtitle, text.removeFromTop (30.0f), Fonts::display (14.0f));
+            return;
         }
 
         auto text = body.withTrimmedTop (top).reduced (30.0f, 0.0f);
@@ -456,6 +623,11 @@ private:
             }
         }
 
+        for (int i = 0; i < switches.size(); ++i)
+            switches[i]->setToggleState (pedal.getSwitches()[i]->isOn(), dontSendNotification);
+        for (auto* s : selectors)
+            s->sync();
+
         if (changed)
             repaint();
     }
@@ -464,7 +636,10 @@ private:
     PedalProcessor::Look look;
     PedalKnobLook knobLook;
     OwnedArray<Slider> knobs;
-    juce::Rectangle<float> body;
+    OwnedArray<PedalSwitch> switches;
+    OwnedArray<PedalSelector> selectors;
+    juce::Rectangle<float> body, plate;
+    float nameTop = 310.0f;
     Image enclosure;
 };
 

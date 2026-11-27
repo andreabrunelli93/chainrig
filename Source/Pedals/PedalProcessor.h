@@ -26,6 +26,24 @@ public:
         juce::String subtitle;                        // riga piccola sotto il nome
         Artwork::Drawing emblem;                      // disegno inciso tra manopole e nome
         float wear = 0.0f;                            // 0 nuovo ... 1 molto consumato
+
+        /** Posizione di una manopola: centro orizzontale (0-1 della larghezza del corpo), distanza del
+            bordo alto dal corpo in pixel, diametro in pixel. Vuoto = tutte in fila, uguali. */
+        struct KnobPlace { float x = 0.5f, top = 86.0f, size = 112.0f; };
+        std::vector<KnobPlace> knobPlaces;            // nell'ordine delle manopole (addKnob)
+        bool footPlate = false;                       // placca rettangolare grande sotto il nome
+
+        // misure della finestra (0 = automatiche) e posizione del nome dal bordo alto del corpo
+        int width = 0, height = 0;
+        float nameTop = 0.0f;
+    };
+
+    /** Selettore a più posizioni (es. RATIO 2:1 / 4:1 / 10:1): parametro 0 … n-1. */
+    struct Selector
+    {
+        BuiltInParameter* parameter = nullptr;
+        juce::StringArray choices;
+        int getIndex() const   { return juce::roundToInt (parameter->get()); }
     };
 
     struct Info
@@ -37,6 +55,7 @@ public:
         juce::String menuCategory;     // sottomenu "Built-in effects"
         int uniqueId = 0;              // 4 caratteri; mai cambiarlo dopo un rilascio
         int oversamplingOrder = 2;     // 2^order: 2 = 4x
+        bool stereoOutput = false;     // true: processCircuitStereo (ingresso mono, due uscite)
         Look look;
     };
 
@@ -45,6 +64,11 @@ public:
     static juce::PluginDescription describe (const Info&);
     const Info& getInfo() const                               { return info; }
     const juce::Array<BuiltInParameter*>& getKnobs() const   { return knobs; }
+    const juce::Array<BuiltInParameter*>& getSwitches() const { return switches; }
+    const std::vector<Selector>& getSelectors() const         { return selectors; }
+
+    /** Tutti i comandi (manopole, interruttori, selettori): per gli strumenti di prova. */
+    juce::Array<BuiltInParameter*> getControls() const;
 
     /** Per le prove offline (pedal_lab_render): statistiche del modello, es. iterazioni del solutore. */
     virtual juce::String getDiagnostics() const               { return {}; }
@@ -76,14 +100,30 @@ protected:
     /** Manopola 0-10 come sul pedale. */
     BuiltInParameter* addKnob (const juce::String& id, const juce::String& name, float defaultValue);
 
+    /** Interruttore acceso/spento (nella finestra: un pulsante con la spia sotto le manopole). */
+    BuiltInParameter* addSwitch (const juce::String& id, const juce::String& name, bool defaultOn);
+
+    /** Selettore a più posizioni (nella finestra: un pulsante che passa alla posizione dopo). */
+    BuiltInParameter* addSelector (const juce::String& id, const juce::String& name,
+                                   const juce::StringArray& choices, int defaultIndex);
+
     /** Thread audio fermo. rate = frequenza sovracampionata. */
     virtual void prepareCircuit (double rate) = 0;
     /** Thread audio: n campioni mono alla frequenza sovracampionata, in volt, sul posto. */
     virtual void processCircuit (float* samples, int n) = 0;
 
+    /** Solo con Info::stereoOutput: `left` contiene l'ingresso (mono) e riceve l'uscita sinistra,
+        `right` riceve l'uscita destra. */
+    virtual void processCircuitStereo (float* left, float* right, int n)
+    {
+        processCircuit (left, n);
+        std::copy (left, left + n, right);
+    }
+
 private:
     Info info;
-    juce::Array<BuiltInParameter*> knobs;
+    juce::Array<BuiltInParameter*> knobs, switches;
+    std::vector<Selector> selectors;
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
     int preparedBlock = 0;
 

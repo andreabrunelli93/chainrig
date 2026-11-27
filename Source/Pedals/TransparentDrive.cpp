@@ -1,5 +1,6 @@
 #include "TransparentDrive.h"
 #include "Artwork.h"
+#include "Taper.h"
 
 using namespace juce;
 
@@ -31,14 +32,7 @@ namespace
         static constexpr double y[] = { 0.0, 0.05, 0.37, 0.925, 0.975 };
         static constexpr double m[] = { 0.025, 0.0658, 0.1458, 0.073, 0.0174 };   // pendenze, già limitate
 
-        knob = jlimit (0.0, 10.0, knob);
-        int i = 0;
-        while (i < 3 && knob > x[i + 1])
-            ++i;
-
-        const double h = x[i + 1] - x[i], t = (knob - x[i]) / h, t2 = t * t, t3 = t2 * t;
-        return (2 * t3 - 3 * t2 + 1) * y[i] + (t3 - 2 * t2 + t) * h * m[i]
-             + (-2 * t3 + 3 * t2) * y[i + 1] + (t3 - t2) * h * m[i + 1];
+        return Taper::measured (x, y, m, knob);
     }
 
     constexpr double railLow = 3.0;    // TL072 a 9 V con Vb = 4,5 V

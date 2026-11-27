@@ -148,3 +148,59 @@ Artwork::Drawing Artwork::centurionCentaur()
     }
     return d;
 }
+
+Artwork::Drawing Artwork::tapeReels()
+{
+    Drawing d;
+    constexpr float r = 44.0f, cy = 82.0f;
+    for (const float cx : { 52.0f, 148.0f })
+    {
+        Path disc;
+        disc.addEllipse (cx - r, cy - r, 2 * r, 2 * r);
+        d.fills.push_back (disc);
+
+        // tre finestre tra i raggi, il mozzo e il foro centrale
+        for (int w = 0; w < 3; ++w)
+        {
+            const float a = juce::MathConstants<float>::twoPi * (float) w / 3.0f + 0.25f;
+            Path window;
+            window.addPieSegment (cx - r + 7, cy - r + 7, 2 * r - 14, 2 * r - 14, a, a + 1.55f, 0.42f);
+            d.cuts.push_back (window);
+        }
+        Path hub;
+        hub.addEllipse (cx - 6.0f, cy - 6.0f, 12.0f, 12.0f);
+        d.cuts.push_back (hub);
+    }
+
+    // nastro: dal bordo esterno di ogni bobina giù ai rulli guida, poi dritto sopra la testina
+    Path tape;
+    tape.startNewSubPath (8.5f, 84.0f);
+    tape.lineTo (18.0f, 160.0f);
+    tape.lineTo (182.0f, 160.0f);
+    tape.lineTo (191.5f, 84.0f);
+    Path stroke;
+    PathStrokeType (4.0f, PathStrokeType::mitered, PathStrokeType::butt).createStrokedPath (stroke, tape);
+    d.fills.push_back (stroke);
+
+    for (const float x : { 18.0f, 182.0f })   // rulli guida
+    {
+        Path roller;
+        roller.addEllipse (x - 8.0f, 152.0f, 16.0f, 16.0f);
+        d.fills.push_back (roller);
+        Path pin;
+        pin.addEllipse (x - 2.5f, 157.5f, 5.0f, 5.0f);
+        d.cuts.push_back (pin);
+    }
+
+    // testine sotto il nastro: cancellazione, registrazione, lettura
+    for (const float x : { 62.0f, 92.0f, 122.0f })
+    {
+        Path head;
+        head.addRoundedRectangle (x, 164.0f, 16.0f, 20.0f, 3.0f);
+        d.fills.push_back (head);
+        Path headGap;
+        headGap.addRectangle (x + 7.0f, 164.0f, 2.0f, 8.0f);
+        d.cuts.push_back (headGap);
+    }
+    return d;
+}

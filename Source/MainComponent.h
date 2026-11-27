@@ -145,6 +145,7 @@ class PluginWindow final : public juce::DocumentWindow
 {
 public:
     PluginWindow (juce::AudioProcessor&, std::function<void()> onClose);
+    ~PluginWindow() override;
     void closeButtonPressed() override;
 
 private:

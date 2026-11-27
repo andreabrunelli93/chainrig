@@ -122,6 +122,14 @@ void Icons::draw (Graphics& g, Engine::SlotKind kind, Rectangle<float> area, Col
             p.addCentredArc (4.5f, 18.5f, 16.0f, 16.0f, 0.0f, 0.0f, pi * 0.5f, true);
             break;
 
+        case K::tape:  // due bobine con il nastro teso sotto
+            p.addEllipse (1.5f, 4.0f, 10.0f, 10.0f);
+            p.addEllipse (12.5f, 4.0f, 10.0f, 10.0f);
+            p.addEllipse (5.0f, 7.5f, 3.0f, 3.0f);
+            p.addEllipse (16.0f, 7.5f, 3.0f, 3.0f);
+            p.startNewSubPath (6.5f, 14.0f); p.lineTo (9.0f, 19.5f); p.lineTo (15.0f, 19.5f); p.lineTo (17.5f, 14.0f);
+            break;
+
         case K::fx:
         case K::automatic: // scintilla
             p.startNewSubPath (12.0f, 3.0f);

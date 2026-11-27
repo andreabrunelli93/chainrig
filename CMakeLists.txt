@@ -84,14 +84,30 @@ target_sources(ChainRig PRIVATE
     Source/NamProcessor.h
     Source/Pedals/Artwork.cpp
     Source/Pedals/Artwork.h
+    Source/Pedals/BbdChorus.cpp
+    Source/Pedals/BbdChorus.h
+    Source/Pedals/BbdDelay.h
     Source/Pedals/CircuitModel.h
+    Source/Pedals/Compander.h
+    Source/Pedals/EnvelopeDetector.h
+    Source/Pedals/OpAmpOverdrive.cpp
+    Source/Pedals/OpAmpOverdrive.h
+    Source/Pedals/OtaCompressor.cpp
+    Source/Pedals/OtaCompressor.h
     Source/Pedals/PedalEditor.cpp
     Source/Pedals/PedalProcessor.cpp
     Source/Pedals/PedalProcessor.h
+    Source/Pedals/StereoChorus.cpp
+    Source/Pedals/StereoChorus.h
+    Source/Pedals/Taper.h
     Source/Pedals/Pedals.cpp
     Source/Pedals/Pedals.h
     Source/Pedals/TransparentDrive.cpp
+    Source/Pedals/TapeMachine.cpp
+    Source/Pedals/TapeMachine.h
     Source/Pedals/TransparentDrive.h
+    Source/Pedals/VcaCompressor.cpp
+    Source/Pedals/VcaCompressor.h
     Source/PluginChooser.cpp
     Source/PluginChooser.h
     Source/PluginScanner.h
@@ -137,7 +153,13 @@ if(CHAINRIG_PEDAL_LAB)
         Source/Pedals/PedalProcessor.cpp
         Source/Pedals/Artwork.cpp
         Source/Pedals/Pedals.cpp
-        Source/Pedals/TransparentDrive.cpp)
+        Source/Pedals/BbdChorus.cpp
+        Source/Pedals/StereoChorus.cpp
+        Source/Pedals/OpAmpOverdrive.cpp
+        Source/Pedals/OtaCompressor.cpp
+        Source/Pedals/TransparentDrive.cpp
+        Source/Pedals/TapeMachine.cpp
+        Source/Pedals/VcaCompressor.cpp)
     target_compile_definitions(pedal_lab_render PRIVATE
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
@@ -160,7 +182,13 @@ if(CHAINRIG_PEDAL_LAB)
         Source/Pedals/PedalEditor.cpp
         Source/Pedals/PedalProcessor.cpp
         Source/Pedals/Pedals.cpp
-        Source/Pedals/TransparentDrive.cpp)
+        Source/Pedals/BbdChorus.cpp
+        Source/Pedals/StereoChorus.cpp
+        Source/Pedals/OpAmpOverdrive.cpp
+        Source/Pedals/OtaCompressor.cpp
+        Source/Pedals/TransparentDrive.cpp
+        Source/Pedals/TapeMachine.cpp
+        Source/Pedals/VcaCompressor.cpp)
     target_compile_definitions(pedal_snapshot PRIVATE
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0

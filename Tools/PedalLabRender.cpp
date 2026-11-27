@@ -75,7 +75,7 @@ int main (int argc, char* argv[])
         const auto id = args[i].upToFirstOccurrenceOf ("=", false, false);
         const auto value = args[i].fromFirstOccurrenceOf ("=", false, false).getFloatValue();
         bool found = false;
-        for (auto* k : pedal->getKnobs())
+        for (auto* k : pedal->getControls())
             if (k->getParameterID() == id)
             {
                 k->set (value);

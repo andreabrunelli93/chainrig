@@ -35,7 +35,14 @@ public:
     /** Coppia di diodi uguali antiparalleli tra node e massa: i = 2 Is sinh (v / (n Vt)). */
     void setDiodePair (int node, double saturationCurrent, double emission, double thermalVoltage = 0.02585)
     {
-        diodeNode = node;
+        setDiodePair (node, 0, saturationCurrent, emission, thermalVoltage);
+    }
+
+    /** Coppia di diodi tra due nodi qualsiasi (es. nella retroazione di un op-amp): v = v(a) - v(b). */
+    void setDiodePair (int nodeA, int nodeB, double saturationCurrent, double emission, double thermalVoltage = 0.02585)
+    {
+        diodeNode = nodeA;
+        diodeNodeB = nodeB;
         diodeIs = saturationCurrent;
         diodeVt = emission * thermalVoltage;
     }
@@ -129,6 +136,17 @@ public:
             return pv (node, cd.a) - pv (node, cd.b);
         };
 
+        // porta dei diodi: corrente iniettata in a e tolta da b, tensione v(a) - v(b)
+        const int da = diodeNode, db = diodeNodeB;
+        const auto capPort = [&] (int c)                      // N_x P N_n^T
+        {
+            return (da > 0 ? capRow (c, da - 1) : 0.0) - (db > 0 ? capRow (c, db - 1) : 0.0);
+        };
+        const auto portCol = [&] (int col)                    // N_n P e_col
+        {
+            return (da > 0 ? at (P, da - 1, col) : 0.0) - (db > 0 ? at (P, db - 1, col) : 0.0);
+        };
+
         for (int c = 0; c < NC; ++c)
         {
             const double scale = 2.0 * gc[(size_t) c];
@@ -140,16 +158,16 @@ public:
             }
             for (int u = 0; u < NU; ++u)
                 Mxu[(size_t) c][(size_t) u] = scale * capRow (c, numNodes + u);
-            Mxn[(size_t) c] = diodeNode > 0 ? scale * capRow (c, diodeNode - 1) : 0.0;
+            Mxn[(size_t) c] = hasDiodes() ? scale * capPort (c) : 0.0;
         }
 
-        if (diodeNode > 0)
+        if (hasDiodes())
         {
             for (int d = 0; d < NC; ++d)
-                Mnx[(size_t) d] = nodeCap (diodeNode, d);
+                Mnx[(size_t) d] = nodeCap (da, d) - nodeCap (db, d);
             for (int u = 0; u < NU; ++u)
-                Mnu[(size_t) u] = at (P, diodeNode - 1, numNodes + u);
-            K = at (P, diodeNode - 1, diodeNode - 1);
+                Mnu[(size_t) u] = portCol (numNodes + u);
+            K = (da > 0 ? portCol (da - 1) : 0.0) - (db > 0 ? portCol (db - 1) : 0.0);
         }
 
         for (int y = 0; y < NY; ++y)
@@ -159,7 +177,7 @@ public:
                 Myx[(size_t) y][(size_t) d] = nodeCap (node, d);
             for (int u = 0; u < NU; ++u)
                 Myu[(size_t) y][(size_t) u] = at (P, node - 1, numNodes + u);
-            Myn[(size_t) y] = diodeNode > 0 ? pv (node, diodeNode) : 0.0;
+            Myn[(size_t) y] = hasDiodes() ? pv (node, da) - pv (node, db) : 0.0;
         }
     }
 
@@ -169,7 +187,7 @@ public:
     {
         double i = 0.0;
 
-        if (diodeNode > 0)
+        if (hasDiodes())
         {
             double p = 0.0;
             for (size_t d = 0; d < NC; ++d) p += Mnx[d] * h[d];
@@ -299,7 +317,8 @@ private:
     std::vector<int> inputs, outputs;
     std::vector<OpAmp> opAmps;
     int numNodes = 0, size = 0;
-    int diodeNode = 0;
+    int diodeNode = 0, diodeNodeB = 0;
+    bool hasDiodes() const noexcept   { return diodeNode > 0 || diodeNodeB > 0; }
     double diodeIs = 0.0, diodeVt = 1.0, K = 0.0;
     bool dirty = true;
 

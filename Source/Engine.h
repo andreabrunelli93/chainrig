@@ -39,10 +39,10 @@ public:
     enum class MidiMode { momentary, absolute };
 
     /** Che cosa fa un posto: decide l'icona e l'etichetta. "automatic" lo ricava dal plugin. */
-    enum class SlotKind { automatic, amp, ir, drive, compressor, eq, modulation, delay, reverb, fx };
+    enum class SlotKind { automatic, amp, ir, drive, compressor, eq, modulation, delay, reverb, tape, fx };   // fx sempre l'ultimo
     static constexpr SlotKind allSlotKinds[] = { SlotKind::amp, SlotKind::ir, SlotKind::drive, SlotKind::compressor,
                                                  SlotKind::eq, SlotKind::modulation, SlotKind::delay,
-                                                 SlotKind::reverb, SlotKind::fx };
+                                                 SlotKind::reverb, SlotKind::tape, SlotKind::fx };
 
     static juce::String getSlotKindTag (SlotKind);    // breve, per l'etichetta: "AMP", "CAB · IR"...
     static juce::String getSlotKindName (SlotKind);   // per i menu: "Amplificatore"...

@@ -22,4 +22,7 @@ namespace Artwork
 
     /** Centauro centurione: elmo romano con cresta, lancia e scudo, zampa anteriore alzata. */
     Drawing centurionCentaur();
+
+    /** Due bobine di nastro (raggi traforati, mozzo) con il nastro che passa sotto, sulla testina. */
+    Drawing tapeReels();
 }
