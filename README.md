@@ -22,9 +22,10 @@ You also need your own VST3 plugins and, on Windows, your audio interface's ASIO
 ## Features
 
 - **10-slot serial chain.** Tap a slot to pick a plugin from your list. The same menu opens the plugin's editor, bypasses, replaces, moves or removes it. Empty slots are skipped.
-- **Built-in NAM slot.** Plays [Neural Amp Modeler](https://www.neuralampmodeler.com) captures (`.nam`, A1 and A2) without a separate plugin, followed by an optional cab IR (`.wav`, `.aif`, `.flac`). Pick **Built-in → NAM: capture + IR** from the slot menu. The window shows the capture's name, gear and author, and has **Normalize** (brings captures to a similar volume, from the loudness stored in the file), **Lite** for A2 captures (the smaller model inside the file, for slower computers), input and output gain, and an IR on/off switch. Switching capture crossfades, so it doesn't click. Captures recorded at 48 kHz are resampled when the interface runs at another rate. The slot shows the capture's name. If a preset refers to a capture or IR that isn't at its saved path (for example a preset copied from another computer), ChainRig looks for a file with the same name in `Documents/ChainRig/Tones` and its subfolders.
+- **Built-in NAM slot.** Plays [Neural Amp Modeler](https://www.neuralampmodeler.com) captures (`.nam`, A1 and A2) without a separate plugin, followed by an optional cab IR (`.wav`, `.aif`, `.flac`). Pick **Built-in effects → Amp / Cab → NAM** from the slot menu. The window shows the capture's name, gear and author, and has **Normalize** (brings captures to a similar volume, from the loudness stored in the file), **Lite** for A2 captures (the smaller model inside the file, for slower computers), input and output gain, and an IR on/off switch. Switching capture crossfades, so it doesn't click. Captures recorded at 48 kHz are resampled when the interface runs at another rate. The slot shows the capture's name. If a preset refers to a capture or IR that isn't at its saved path (for example a preset copied from another computer), ChainRig looks for a file with the same name in `Documents/ChainRig/Tones` and its subfolders.
 - **Drag to reorder.** Drag a slot onto an empty slot to move it there, or onto an occupied slot to insert it and shift the others. Footswitch assignments follow the plugins.
-- **Slot name and type.** From the slot menu: **Rename...** (leave empty to go back to the plugin name) and **Type**: amp, cab/IR, drive, compressor, EQ, modulation, delay, reverb, other. The type sets the slot's icon and tag. "Automatic" guesses it from the plugin's category and name. Name and type are stored in the preset.
+- **Built-in pedals.** Analog pedals and a tape machine that run inside ChainRig, with the same knobs as the real thing, under **Built-in effects** in the slot menu. See [Built-in pedals](#built-in-pedals) below.
+- **Slot name and type.** From the slot menu: **Rename...** (leave empty to go back to the plugin name) and **Type**: amp, cab/IR, drive, compressor, EQ, modulation, delay, reverb, tape, other. The type sets the slot's icon and tag. "Automatic" guesses it from the plugin's category and name. Name and type are stored in the preset.
 - **4 large footswitches, switch or scene.** In **switch** mode a footswitch turns its assigned slots on and off and shows their names (for example "DRIVE + DELAY"). A slot assigned to a switch only plays while that switch is on.
   In **scene** mode it recalls a snapshot of which slots are on and which are off (for example CLEAN, CRUNCH, LEAD). Only one scene is lit at a time. In edit mode, tap the footswitch and choose **Mode**, then **Save current on/off to this scene**. Scenes are stored in the preset, so every rig has its own.
 - **Tuner** (YIN). It works on the input, before the chain, and mutes the output while you tune. It shows the note, octave, cents, frequency and the nearest standard-tuning string.
@@ -41,6 +42,31 @@ You also need your own VST3 plugins and, on Windows, your audio interface's ASIO
 - **Output meter** (right) with peak hold, a latching **CLIP** light and a master **volume** knob (-60 dB = muted, up to +12 dB, double-tap for 0 dB, saved in the settings). The meter and the recorder follow the volume. Tap either meter to reset it.
 - **Recorder.** **REC** writes the output (channels 1-2, i.e. the whole chain) to a 24-bit stereo WAV file in your Downloads folder.
 - **Low latency.** ASIO on Windows, Core Audio on macOS. The top bar shows the estimated latency, the CPU load, the peak load of a single audio block and the xrun count.
+
+## Built-in pedals
+
+Pick them from the slot menu: **Built-in effects → category → pedal**. They load like any plugin, save into presets, and open a pedal-style window with the knobs. Most are simulated from their schematics: the circuit is solved sample by sample (nodal DK method), so the drive and compression react to how hard you play, unlike an impulse response. Pedal names refer to the circuits they model; the window artwork is original.
+
+| Menu | Pedal | What it is | Controls |
+|---|---|---|---|
+| Distortion / Overdrive | **Centurion Klone** | Transparent overdrive: the clean signal blended with a germanium-diode clipped path through a dual-gang gain control, active treble, 18 V headroom. The Gain curve is measured against calibrated captures of a hardware unit. | Gain, Treble, Output |
+| Distortion / Overdrive | **Tube Screamer** | Op-amp overdrive with silicon diodes in the feedback loop: a 720 Hz high-pass ahead of the clipping keeps the bass tight, the clean signal passes under the soft clipping, then a 723 Hz low-pass and an active tone control. Drive curve and diodes matched to calibrated captures. | Drive, Tone, Level |
+| Dynamics | **Dyna Comp** | OTA compressor modelled from its circuit, with treble pre-emphasis, a two-transistor full-wave detector, a fast attack (and its click) and a release of about 1.5 s. Like the hardware it is a bit dark and has little output. | Sustain, Level, Blend (clean signal mixed in for the pick attack; 10 = original) |
+| Dynamics | **Empress Compressor** | Studio-style VCA compressor with feedback detection: an original design with the reference pedal's controls (its schematic is not public), transparent, no tone change from the compression. | Input, Output, Mix, Attack (50 µs – 50 ms), Release (50 ms – 1 s), Tone (tilt around 500 Hz); Ratio 2:1 / 4:1 / 10:1, SC HPF |
+| Modulation | **Small Clone** | Bucket-brigade chorus: treble pre-emphasis, anti-aliasing and reconstruction filters around a 1024-stage delay line, a clock swept by a triangle LFO, de-emphasis mixed with the dry signal. | Rate (0.4 – 9.5 Hz), Depth |
+| Modulation | **SCF Chorus** | Stereo bucket-brigade chorus with compander noise reduction (2:1 before the delay line, 1:2 after it), a linear clock oscillator swept by a comparator LFO. Chorus mode only. | Speed (0.1 – 10 Hz), Width, Intensity, Gain; Stereo |
+| Modulation | **TR-2 Tremolo** | VCA tremolo from its schematic: a triangle LFO (90 – 900 ms period) that the Wave control squares off by clipping, and a 10 ms filter on the VCA control so even the square wave doesn't click. | Rate, Wave (triangle → square), Depth |
+| Delay | **Space Echo RE-201** | Three-head tape echo following the original block diagram, on the same tape model as the EP-3: head 1 at 69 – 177 ms, heads 2 and 3 at twice and three times that, Intensity taken before the tone controls, repeats that darken as the tape slows, tape hiss (60 dB S/N), wow and flutter. Past Intensity 7 it self-oscillates, held back by tape and amplifier saturation. No spring reverb. | Input, Rate, Intensity, Echo, Bass, Treble (repeats only), Wow; Heads 1 / 2 / 3 / 2+3 / 1+2 / 1+2+3 |
+| Tape | **Echoplex EP-3** | Physical model of magnetic tape (no echo): record pre-emphasis, the tape's hysteresis (Jiles-Atherton), playback-head losses and head bump that depend on the tape speed, wow and flutter. Mostly third-harmonic saturation that grows smoothly with your playing. | Drive (level compensated), Bias, Wow, Level; Speed 7.5 / 15 / 30 ips |
+| Amp / Cab | **NAM** | Neural Amp Modeler captures with an optional cab IR (see above). | Capture, IR, levels |
+
+Notes:
+
+- **Level.** With the default knobs each pedal plays close to the bypass level. The Dyna Comp and the Tube Screamer, like the hardware, need Level around 8.
+- **SCF Chorus Stereo switch.** Off (default): both outputs carry dry + effect, safe in a mono chain such as before an amp capture. On: the effect is in anti-phase between left and right, for stereo rigs after the amp (summed to mono it cancels).
+- **Space Echo Rate.** Turning it glides the delay time (the motor and the tape have inertia), like the hardware.
+- **Echoplex EP-3 Bias.** Low = under-biased tape, dirtier and looser; 5 = properly biased.
+- **CPU.** Each pedal uses between 0.1% and about 2% of an audio block on a recent laptop.
 
 ## Building
 
@@ -131,7 +157,9 @@ Bluetooth: controllers sold with their own USB dongle work out of the box. For n
 ## Code structure
 
 - `Source/Engine.*`: audio device, processing graph (input → tuner → slots → output), bypass, footswitches, MIDI, presets, tempo, audio health checks.
-- `Source/NamProcessor.*`: the built-in NAM slot (capture, resampling, IR, gains, its window) and the "Built-in" plugin format.
+- `Source/NamProcessor.*`: the built-in NAM slot (capture, resampling, IR, gains, its window).
+- `Source/BuiltIns.*`: the list of built-in effects and the "Built-in" plugin format that creates them.
+- `Source/Pedals/`: built-in pedals. `CircuitModel.h` solves a circuit (nodes, ideal op-amps, one diode pair between any two nodes) with the nodal DK method; `Taper.h` has the pot curves; `EnvelopeDetector.h` models transistor envelope detectors; `BbdDelay.h` has the bucket-brigade delay line and the triangle LFO; `Compander.h` the NE570-style compander; `TapeHysteresis.h` the magnetic tape (Jiles-Atherton hysteresis), used by `TapeMachine` and `TapeEcho`; `VcaCompressor` the studio-style compressor; pedals can have stereo outputs (`Info::stereoOutput`); `PedalProcessor` handles knobs, switches, multi-position selectors, state, oversampling and the window (`PedalEditor.cpp`, artwork in `Artwork.*`); one file per pedal. `Tools/PedalSnapshot.cpp` saves a pedal window as a PNG. `Tools/PedalLabRender.cpp` renders a WAV through a pedal offline and times it (`-DCHAINRIG_PEDAL_LAB=ON`).
 - `Source/Recorder.h`: the audio callback wrapper. It runs the graph, then feeds the meter, the diagnostics and the WAV writer.
 - `Source/Tuner.h`: tuner node, lock-free FIFO to the UI, YIN pitch detection.
 - `Source/PluginScanner.h`: out-of-process plugin scanning.

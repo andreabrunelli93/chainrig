@@ -1,6 +1,6 @@
 #include "Engine.h"
 #include "PluginScanner.h"
-#include "NamProcessor.h"
+#include "BuiltIns.h"
 
 using namespace juce;
 
@@ -198,7 +198,7 @@ Engine::Engine()
     appProperties.setStorageParameters (options);
 
     addDefaultFormatsToManager (formatManager);
-    formatManager.addFormat (std::make_unique<BuiltInPluginFormat>());   // posti integrati (NAM)
+    formatManager.addFormat (std::make_unique<BuiltInPluginFormat>());   // posti integrati (NAM, pedali)
 
     if (auto xml = props().getXmlValue ("pluginList"))
         knownPlugins.recreateFromXml (*xml);
@@ -839,6 +839,7 @@ Engine::SlotKind Engine::guessSlotKind (int slot) const
     if (has ({ "impulse", "cab", " ir ", "ir loader", "speaker" }))         return SlotKind::ir;
     if (has ({ "reverb", "verb", "plate", "room", "hall", "shimmer" }))
         return SlotKind::reverb;
+    if (d.category.equalsIgnoreCase ("tape") || has ({ "tape machine", "tape sat" })) return SlotKind::tape;
     if (has ({ "delay", "echo" }))                                          return SlotKind::delay;
     if (has ({ "dynamics", "compress", "limit" }))                          return SlotKind::compressor;
     if (has ({ "eq", "equal", "filter" }))                                  return SlotKind::eq;
@@ -860,6 +861,7 @@ String Engine::getSlotKindTag (SlotKind k)
         case SlotKind::modulation: return "MOD";
         case SlotKind::delay:      return "DELAY";
         case SlotKind::reverb:     return "REVERB";
+        case SlotKind::tape:       return "TAPE";
         case SlotKind::fx:
         case SlotKind::automatic:  break;
     }
@@ -879,6 +881,7 @@ String Engine::getSlotKindName (SlotKind k)
         case SlotKind::modulation: return "Modulation";
         case SlotKind::delay:      return "Delay";
         case SlotKind::reverb:     return "Reverb";
+        case SlotKind::tape:       return "Tape";
         case SlotKind::fx:         break;
     }
     return "Other effect";
@@ -896,6 +899,7 @@ String Engine::getSlotKindId (SlotKind k)
         case SlotKind::modulation: return "modulation";
         case SlotKind::delay:      return "delay";
         case SlotKind::reverb:     return "reverb";
+        case SlotKind::tape:       return "tape";
         case SlotKind::fx:         return "fx";
         case SlotKind::automatic:  break;
     }

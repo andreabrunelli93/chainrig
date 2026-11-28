@@ -2,52 +2,11 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
+#include "BuiltInParameter.h"
 #include <atomic>
 #include <memory>
 
-//==============================================================================
-/** Parametro di un posto integrato (AudioPluginInstance accetta solo HostedAudioProcessorParameter).
-    get() è nel valore reale (dB, oppure 0/1 per gli interruttori). */
-class NamParameter final : public juce::HostedAudioProcessorParameter
-{
-public:
-    NamParameter (const juce::String& parameterId, const juce::String& parameterName,
-                  juce::NormalisableRange<float> r, float defaultRealValue, const juce::String& unit, bool boolean = false)
-        : range (r), id (parameterId), name (parameterName), label (unit),
-          defaultValue (r.convertTo0to1 (defaultRealValue)), isBool (boolean), value (defaultValue) {}
-
-    float get() const                    { return range.convertFrom0to1 (value.load()); }
-    bool isOn() const                    { return value.load() >= 0.5f; }
-    void set (float realValue)           { setValueNotifyingHost (range.convertTo0to1 (range.snapToLegalValue (realValue))); }
-
-    juce::String getParameterID() const override        { return id; }
-    float getValue() const override                     { return value.load(); }
-    void setValue (float v) override                    { value = v; }
-    float getDefaultValue() const override              { return defaultValue; }
-    juce::String getName (int maximumLength) const override { return name.substring (0, maximumLength); }
-    juce::String getLabel() const override              { return label; }
-    juce::String getText (float v, int) const override
-    {
-        return isBool ? juce::String (v >= 0.5f ? "On" : "Off") : juce::String (range.convertFrom0to1 (v), 1);
-    }
-    float getValueForText (const juce::String& text) const override
-    {
-        if (isBool)
-            return text.equalsIgnoreCase ("on") || text.getIntValue() != 0 ? 1.0f : 0.0f;
-        return range.convertTo0to1 (range.snapToLegalValue (text.getFloatValue()));
-    }
-    bool isBoolean() const override                     { return isBool; }
-    bool isDiscrete() const override                    { return isBool; }
-    int getNumSteps() const override                    { return isBool ? 2 : juce::AudioProcessor::getDefaultNumParameterSteps(); }
-
-    const juce::NormalisableRange<float> range;
-
-private:
-    const juce::String id, name, label;
-    const float defaultValue;
-    const bool isBool;
-    std::atomic<float> value;
-};
+using NamParameter = BuiltInParameter;
 
 //==============================================================================
 /** Posto "NAM" integrato: una cattura Neural Amp Modeler (.nam, anche A2) seguita da una IR
@@ -155,36 +114,4 @@ private:
     juce::SmoothedValue<float> inGainSmoothed, outGainSmoothed, irMix;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NamProcessor)
-};
-
-//==============================================================================
-/** Formato "Built-in" per AudioPluginFormatManager: così i posti integrati passano dalla stessa
-    strada dei VST3 (creazione, preset, riuso dei nodi, nome del plugin). */
-class BuiltInPluginFormat final : public juce::AudioPluginFormat
-{
-public:
-    juce::String getName() const override                                  { return NamProcessor::formatName; }
-    void findAllTypesForFile (juce::OwnedArray<juce::PluginDescription>& results, const juce::String& id) override
-    {
-        if (id == NamProcessor::identifier)
-            results.add (new juce::PluginDescription (NamProcessor::getDescription()));
-    }
-    bool fileMightContainThisPluginType (const juce::String& id) override  { return id == NamProcessor::identifier; }
-    juce::String getNameOfPluginFromIdentifier (const juce::String& id) override { return id; }
-    bool pluginNeedsRescanning (const juce::PluginDescription&) override   { return false; }
-    bool doesPluginStillExist (const juce::PluginDescription& d) override  { return d.fileOrIdentifier == NamProcessor::identifier; }
-    bool canScanForPlugins() const override                                { return false; }
-    bool isTrivialToScan() const override                                  { return true; }
-    juce::StringArray searchPathsForPlugins (const juce::FileSearchPath&, bool, bool) override { return {}; }
-    juce::FileSearchPath getDefaultLocationsToSearch() override            { return {}; }
-    bool requiresUnblockedMessageThreadDuringCreation (const juce::PluginDescription&) const override { return false; }
-
-private:
-    void createPluginInstance (const juce::PluginDescription& d, double, int, PluginCreationCallback callback) override
-    {
-        if (d.fileOrIdentifier == NamProcessor::identifier)
-            callback (std::make_unique<NamProcessor>(), {});
-        else
-            callback (nullptr, "Unknown built-in plugin: " + d.fileOrIdentifier);
-    }
 };
