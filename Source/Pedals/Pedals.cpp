@@ -2,6 +2,7 @@
 #include "TransparentDrive.h"
 #include "OtaCompressor.h"
 #include "OpAmpOverdrive.h"
+#include "OpAmpDistortion.h"
 #include "BbdChorus.h"
 #include "StereoChorus.h"
 #include "VcaCompressor.h"
@@ -19,6 +20,7 @@ namespace Pedals
             { OtaCompressor::getInfo(),    [] { return std::make_unique<OtaCompressor>(); } },
             { VcaCompressor::getInfo(),    [] { return std::make_unique<VcaCompressor>(); } },
             { OpAmpOverdrive::getInfo(),   [] { return std::make_unique<OpAmpOverdrive>(); } },
+            { OpAmpDistortion::getInfo(),  [] { return std::make_unique<OpAmpDistortion>(); } },
             { BbdChorus::getInfo(),        [] { return std::make_unique<BbdChorus>(); } },
             { StereoChorus::getInfo(),     [] { return std::make_unique<StereoChorus>(); } },
             { VcaTremolo::getInfo(),       [] { return std::make_unique<VcaTremolo>(); } },

@@ -90,6 +90,8 @@ target_sources(ChainRig PRIVATE
     Source/Pedals/CircuitModel.h
     Source/Pedals/Compander.h
     Source/Pedals/EnvelopeDetector.h
+    Source/Pedals/OpAmpDistortion.cpp
+    Source/Pedals/OpAmpDistortion.h
     Source/Pedals/OpAmpOverdrive.cpp
     Source/Pedals/OpAmpOverdrive.h
     Source/Pedals/OtaCompressor.cpp
@@ -160,6 +162,7 @@ if(CHAINRIG_PEDAL_LAB)
         Source/Pedals/Pedals.cpp
         Source/Pedals/BbdChorus.cpp
         Source/Pedals/StereoChorus.cpp
+        Source/Pedals/OpAmpDistortion.cpp
         Source/Pedals/OpAmpOverdrive.cpp
         Source/Pedals/OtaCompressor.cpp
         Source/Pedals/TransparentDrive.cpp
@@ -191,6 +194,7 @@ if(CHAINRIG_PEDAL_LAB)
         Source/Pedals/Pedals.cpp
         Source/Pedals/BbdChorus.cpp
         Source/Pedals/StereoChorus.cpp
+        Source/Pedals/OpAmpDistortion.cpp
         Source/Pedals/OpAmpOverdrive.cpp
         Source/Pedals/OtaCompressor.cpp
         Source/Pedals/TransparentDrive.cpp
