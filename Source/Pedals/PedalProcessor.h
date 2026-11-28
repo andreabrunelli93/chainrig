@@ -73,6 +73,10 @@ public:
     /** Per le prove offline (pedal_lab_render): statistiche del modello, es. iterazioni del solutore. */
     virtual juce::String getDiagnostics() const               { return {}; }
 
+    /** Valore mostrato dalla manopola nella finestra (0-10). Di solito il parametro; un pedale può
+        mostrare altro (es. il pedale d'espressione MIDI che comanda la manopola al suo posto). */
+    virtual float getKnobDisplayValue (int index) const       { return knobs[index]->get(); }
+
     //==============================================================================
     const juce::String getName() const override              { return info.name; }
     void fillInPluginDescription (juce::PluginDescription& d) const override { d = describe (info); }

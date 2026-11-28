@@ -1,4 +1,5 @@
 #include "Engine.h"
+#include "Pedals/Expression.h"
 #include "PluginScanner.h"
 #include "BuiltIns.h"
 
@@ -253,6 +254,7 @@ Engine::Engine()
     lastAudioSetupKey = getAudioSetupKey();
     deviceManager.addChangeListener (this);
 
+    expressionCC = appProperties.getUserSettings()->getIntValue ("cc_expression", 11);
     enableAllMidiInputs();
     deviceManager.addMidiInputDeviceCallback ({}, this);
 
@@ -528,7 +530,7 @@ String Engine::getButtonDisplayName (int index) const
 
     const auto& button = buttons[(size_t) index];
 
-    if (button.mode == ButtonMode::scene)
+    if (button.mode != ButtonMode::toggle)
         return button.label;
 
     auto sorted = button.slots;
@@ -966,6 +968,8 @@ void Engine::toggleButton (int index)
     if (! isPositiveAndBelow (index, numButtons))
         return;
 
+    if (buttons[(size_t) index].mode == ButtonMode::kill)
+        return;                // il kill si comanda solo con pressione e rilascio: un tocco non deve lasciare muto
     if (buttons[(size_t) index].mode == ButtonMode::scene)
         recallScene (index);   // una scena si richiama sempre, non si "spegne"
     else
@@ -981,6 +985,14 @@ void Engine::setButtonActive (int index, bool active)
     {
         if (active)
             recallScene (index);
+        return;
+    }
+
+    if (buttons[(size_t) index].mode == ButtonMode::kill)
+    {
+        buttons[(size_t) index].active = active;
+        refreshKillState();
+        sendChangeMessage();
         return;
     }
 
@@ -1009,6 +1021,10 @@ void Engine::setButtonMode (int index, ButtonMode mode)
     b.mode = mode;
     b.active = false;
 
+    // le etichette automatiche del modo precedente tornano quella predefinita del pedale
+    if (b.label.startsWith ("SCENE ") || b.label == "KILL")
+        b.label = defaultButtonLabels[index];
+
     if (mode == ButtonMode::scene)
     {
         b.slots.clear();   // una scena non "possiede" posti: li accende o spegne tutti
@@ -1016,11 +1032,14 @@ void Engine::setButtonMode (int index, ButtonMode mode)
             b.label = "SCENE " + String::charToString ((juce_wchar) ('A' + index));
         storeScene (index);   // parte dallo stato attuale, così non è vuota
     }
-    else if (b.label.startsWith ("SCENE "))
+    else if (mode == ButtonMode::kill)
     {
-        b.label = defaultButtonLabels[index];
+        b.slots.clear();   // non accende né spegne posti
+        if (b.label == defaultButtonLabels[index])
+            b.label = "KILL";
     }
 
+    refreshKillState();
     updateBypassStates();
     markDirty();
     sendChangeMessage();
@@ -1147,6 +1166,18 @@ void Engine::handleIncomingMidiMessage (MidiInput*, const MidiMessage& message)
         const int cc = message.getControllerNumber();
         const int value = message.getControllerValue();
 
+        // kill switch: subito, dal thread MIDI (solo un atomico); il resto (spia del pedale) dopo
+        for (const auto& k : killCCs)
+            if (k.load() == cc)
+                tuner->killed = value >= 64;
+
+        // pedale d'espressione: valore continuo letto direttamente dai pedali integrati (Expression.h)
+        if (cc == expressionCC.load())
+        {
+            ExpressionPedal::value = (float) value / 127.0f;
+            return;
+        }
+
         MessageManager::callAsync ([weakThis, cc, value]
         {
             if (auto* self = weakThis.get())
@@ -1195,7 +1226,12 @@ void Engine::handleControllerOnMessageThread (int cc, int value)
 
     for (int i = 0; i < numButtons; ++i)
         if (cc == getButtonCC (i))
-            apply (buttons[(size_t) i].active, [this, i] (bool on) { setButtonActive (i, on); });
+        {
+            if (buttons[(size_t) i].mode == ButtonMode::kill)
+                setButtonActive (i, pressed);   // sempre momentaneo: muto finché il pedale è giù
+            else
+                apply (buttons[(size_t) i].active, [this, i] (bool on) { setButtonActive (i, on); });
+        }
 
     if (cc == getTunerCC())
         apply (tunerActive, [this] (bool on) { setTunerActive (on); });
@@ -1309,6 +1345,18 @@ void Engine::setInputGainDb (float db)
     tuner->inputGainDb = jlimit (-24.0f, 24.0f, db);
     props().setValue ("inputGainDb", (double) tuner->inputGainDb.load());
     sendChangeMessage();
+}
+
+void Engine::refreshKillState()
+{
+    bool anyActive = false;
+    for (int i = 0; i < numButtons; ++i)
+    {
+        const bool isKill = buttons[(size_t) i].mode == ButtonMode::kill;
+        killCCs[(size_t) i] = isKill ? getButtonCC (i) : -1;
+        anyActive = anyActive || (isKill && buttons[(size_t) i].active);
+    }
+    tuner->killed = anyActive;
 }
 
 void Engine::setInputMuted (bool shouldMute)
@@ -1707,7 +1755,7 @@ var Engine::createPresetState() const
         for (auto s : b.slots)
             controlled.add (s);
         buttonObj->setProperty ("slots", controlled);
-        buttonObj->setProperty ("mode", b.mode == ButtonMode::scene ? "scene" : "switch");
+        buttonObj->setProperty ("mode", b.mode == ButtonMode::scene ? "scene" : (b.mode == ButtonMode::kill ? "kill" : "switch"));
 
         Array<var> sceneOn;
         for (auto s : b.sceneOn)
@@ -1937,7 +1985,10 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
             button.active = (bool) b["active"];
             button.slots.clear();
             button.sceneOn.clear();
-            button.mode = b["mode"].toString() == "scene" ? ButtonMode::scene : ButtonMode::toggle;
+            const auto mode = b["mode"].toString();
+            button.mode = mode == "scene" ? ButtonMode::scene : (mode == "kill" ? ButtonMode::kill : ButtonMode::toggle);
+            if (button.mode == ButtonMode::kill)
+                button.active = false;   // un preset non parte mai muto
 
             if (const auto* controlled = b["slots"].getArray())
                 for (const auto& s : *controlled)
@@ -1951,6 +2002,7 @@ bool Engine::loadPresetState (const var& root, String& errors, const String& nam
         }
     }
 
+    refreshKillState();
     rewire();
 
     PluginScanner::log ("PRESET " + nameForLog + ": " + String (numReused) + " plugins reused, "
@@ -2045,6 +2097,7 @@ void Engine::newEmptyPreset()
         buttons[(size_t) i].slots.clear();
         buttons[(size_t) i].sceneOn.clear();
     }
+    refreshKillState();
 
     currentPresetFile = File();
     rewire();

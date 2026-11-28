@@ -1,11 +1,13 @@
 // Strumento di prova dei pedali integrati, senza interfaccia né scheda audio:
-//   pedal_lab_render "<identifier>" in.wav out.wav [--block 128] [gain=7 tone=5 ...]
+//   pedal_lab_render "<identifier>" in.wav out.wav [--block 128] [--expression-sweep 2] [gain=7 tone=5 ...]
+//   --expression-sweep S: pedale d'espressione MIDI da 0 a 127 in S secondi e ritorno, a scalini di 1/127
 // Legge il WAV (canale sinistro), lo passa nel pedale a blocchi, scrive un WAV float a 2 canali
 // e stampa il tempo per blocco rispetto al tempo disponibile.
 // Con --list elenca i pedali.
 
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "../Source/Pedals/Pedals.h"
+#include "../Source/Pedals/Expression.h"
 
 using namespace juce;
 
@@ -33,6 +35,25 @@ int main (int argc, char* argv[])
         return 0;
     }
 
+    // --describe "<identifier>" [param=valore ...]: descrizione del plugin e stato (base64 di JUCE) da
+    // incollare in un preset di prova scritto a mano (chiavi "plugin" e "state" di un posto)
+    if (args.size() >= 2 && args[0] == "--describe")
+    {
+        auto* e = Pedals::find (args[1]);
+        if (e == nullptr)
+            return 2;
+        auto pedal = e->create();
+        for (int i = 2; i < args.size(); ++i)
+            for (auto* k : pedal->getControls())
+                if (k->getParameterID() == args[i].upToFirstOccurrenceOf ("=", false, false))
+                    k->set (args[i].fromFirstOccurrenceOf ("=", false, false).getFloatValue());
+        MemoryBlock state;
+        pedal->getStateInformation (state);
+        std::cout << PedalProcessor::describe (e->info).createXml()->toString (XmlElement::TextFormat().singleLine()) << "\n"
+                  << state.toBase64Encoding() << "\n";
+        return 0;
+    }
+
     if (args.size() < 3)
     {
         std::cerr << "uso: pedal_lab_render \"<identifier>\" in.wav out.wav [--block 128] [param=valore ...]\n";
@@ -49,6 +70,10 @@ int main (int argc, char* argv[])
     int block = 128;
     if (const int i = args.indexOf ("--block"); i >= 0 && i + 1 < args.size())
         block = jmax (1, args[i + 1].getIntValue());
+
+    double sweepSeconds = 0.0;
+    if (const int i = args.indexOf ("--expression-sweep"); i >= 0 && i + 1 < args.size())
+        sweepSeconds = jmax (0.01, args[i + 1].getDoubleValue());
 
     AudioFormatManager formats;
     formats.registerBasicFormats();
@@ -95,6 +120,12 @@ int main (int argc, char* argv[])
     {
         const int n = jmin (block, length - start);
         AudioBuffer<float> view (audio.getArrayOfWritePointers(), 2, start, n);
+        if (sweepSeconds > 0.0)
+        {
+            const double t = std::fmod ((double) start / rate / sweepSeconds, 2.0);   // 0 … 2: su e giù
+            const int cc = jlimit (0, 127, (int) std::floor ((t < 1.0 ? t : 2.0 - t) * 127.0 + 0.5));
+            ExpressionPedal::value = (float) cc / 127.0f;
+        }
         const auto t0 = Time::getHighResolutionTicks();
         pedal->processBlock (view, midi);
         const double seconds = Time::highResolutionTicksToSeconds (Time::getHighResolutionTicks() - t0);

@@ -615,7 +615,7 @@ private:
         bool changed = false;
         for (int i = 0; i < knobs.size(); ++i)
         {
-            const double v = pedal.getKnobs()[i]->get();
+            const double v = pedal.getKnobDisplayValue (i);
             if (! knobs[i]->isMouseButtonDown() && ! approximatelyEqual (knobs[i]->getValue(), v))
             {
                 knobs[i]->setValue (v, dontSendNotification);

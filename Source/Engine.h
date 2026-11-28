@@ -24,8 +24,10 @@ public:
     static constexpr int numButtons = 4;
 
     /** switch: accende e spegne i posti assegnati.
-        scene: richiama un'istantanea di quali posti sono accesi (una sola scena attiva alla volta). */
-    enum class ButtonMode { toggle, scene };
+        scene: richiama un'istantanea di quali posti sono accesi (una sola scena attiva alla volta).
+        kill: finché è premuto (touch o MIDI, valore >= 64) taglia la chitarra all'ingresso, come il kill switch
+              sulla chitarra: le code di delay e riverbero continuano. */
+    enum class ButtonMode { toggle, scene, kill };
 
     struct TouchButton
     {
@@ -110,6 +112,7 @@ public:
     int getTapTempoCC() const;
     int getNextPresetCC() const;
     int getPrevPresetCC() const;
+    int getExpressionCC() const   { return expressionCC.load(); }   // pedale d'espressione (Whammy)
     MidiMode getMidiMode() const;
     void setMidiMode (MidiMode);
 
@@ -276,6 +279,12 @@ private:
 
     NodeID inputNode, outputNode, tunerNode;
     TunerProcessor* tuner = nullptr;
+
+    // CC dei pedali in modo kill (-1 = nessuno), letti dal thread MIDI per tagliare subito senza passare
+    // dal thread dell'interfaccia (che può essere occupato, per esempio mentre carica un preset)
+    std::array<std::atomic<int>, numButtons> killCCs { -1, -1, -1, -1 };
+    void refreshKillState();
+    std::atomic<int> expressionCC { 11 };
 
     std::array<Slot, numSlots> slots;
     std::array<TouchButton, numButtons> buttons;

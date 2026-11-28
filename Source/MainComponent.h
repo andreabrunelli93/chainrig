@@ -32,6 +32,7 @@ public:
     BigButton (MainComponent& o, int i) : owner (o), index (i) {}
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;   // reagisce al tocco, non al rilascio
+    void mouseUp (const juce::MouseEvent&) override;     // solo per il modo kill (muto finché è premuto)
 
 private:
     MainComponent& owner;
@@ -176,6 +177,7 @@ public:
     int getDragSource() const           { return dragSource; }
     void paintOverChildren (juce::Graphics&) override;
     void bigButtonPressed (int index);
+    void bigButtonReleased (int index);
     void setFullScreen (bool);
 
 private:

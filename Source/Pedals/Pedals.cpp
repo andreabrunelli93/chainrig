@@ -9,6 +9,8 @@
 #include "TapeMachine.h"
 #include "TapeEcho.h"
 #include "VcaTremolo.h"
+#include "PitchPedal.h"
+#include "PolyOctaver.h"
 
 namespace Pedals
 {
@@ -26,6 +28,8 @@ namespace Pedals
             { VcaTremolo::getInfo(),       [] { return std::make_unique<VcaTremolo>(); } },
             { TapeMachine::getInfo(),      [] { return std::make_unique<TapeMachine>(); } },
             { TapeEcho::getInfo(),         [] { return std::make_unique<TapeEcho>(); } },
+            { PitchPedal::getInfo(),       [] { return std::make_unique<PitchPedal>(); } },
+            { PolyOctaver::getInfo(),      [] { return std::make_unique<PolyOctaver>(); } },
         };
         return entries;
     }

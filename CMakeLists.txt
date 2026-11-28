@@ -99,6 +99,13 @@ target_sources(ChainRig PRIVATE
     Source/Pedals/PedalEditor.cpp
     Source/Pedals/PedalProcessor.cpp
     Source/Pedals/PedalProcessor.h
+    Source/Pedals/PitchPedal.cpp
+    Source/Pedals/PitchPedal.h
+    Source/Pedals/PolyOctaver.cpp
+    Source/Pedals/PolyOctaver.h
+    Source/Pedals/OctaveBank.h
+    Source/Pedals/GrainShifter.h
+    Source/Pedals/Expression.h
     Source/Pedals/StereoChorus.cpp
     Source/Pedals/StereoChorus.h
     Source/Pedals/Taper.h
@@ -169,6 +176,8 @@ if(CHAINRIG_PEDAL_LAB)
         Source/Pedals/TapeEcho.cpp
         Source/Pedals/TapeMachine.cpp
         Source/Pedals/VcaTremolo.cpp
+        Source/Pedals/PitchPedal.cpp
+        Source/Pedals/PolyOctaver.cpp
         Source/Pedals/VcaCompressor.cpp)
     target_compile_definitions(pedal_lab_render PRIVATE
         JUCE_WEB_BROWSER=0
@@ -201,6 +210,8 @@ if(CHAINRIG_PEDAL_LAB)
         Source/Pedals/TapeEcho.cpp
         Source/Pedals/TapeMachine.cpp
         Source/Pedals/VcaTremolo.cpp
+        Source/Pedals/PitchPedal.cpp
+        Source/Pedals/PolyOctaver.cpp
         Source/Pedals/VcaCompressor.cpp)
     target_compile_definitions(pedal_snapshot PRIVATE
         JUCE_WEB_BROWSER=0

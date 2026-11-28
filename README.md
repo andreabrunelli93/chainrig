@@ -26,8 +26,9 @@ You also need your own VST3 plugins and, on Windows, your audio interface's ASIO
 - **Drag to reorder.** Drag a slot onto an empty slot to move it there, or onto an occupied slot to insert it and shift the others. Footswitch assignments follow the plugins.
 - **Built-in pedals.** Analog pedals and a tape machine that run inside ChainRig, with the same knobs as the real thing, under **Built-in effects** in the slot menu. See [Built-in pedals](#built-in-pedals) below.
 - **Slot name and type.** From the slot menu: **Rename...** (leave empty to go back to the plugin name) and **Type**: amp, cab/IR, drive, compressor, EQ, modulation, delay, reverb, tape, other. The type sets the slot's icon and tag. "Automatic" guesses it from the plugin's category and name. Name and type are stored in the preset.
-- **4 large footswitches, switch or scene.** In **switch** mode a footswitch turns its assigned slots on and off and shows their names (for example "DRIVE + DELAY"). A slot assigned to a switch only plays while that switch is on.
+- **4 large footswitches: switch, scene or kill.** In **switch** mode a footswitch turns its assigned slots on and off and shows their names (for example "DRIVE + DELAY"). A slot assigned to a switch only plays while that switch is on.
   In **scene** mode it recalls a snapshot of which slots are on and which are off (for example CLEAN, CRUNCH, LEAD). Only one scene is lit at a time. In edit mode, tap the footswitch and choose **Mode**, then **Save current on/off to this scene**. Scenes are stored in the preset, so every rig has its own.
+  In **kill** mode it mutes the guitar for as long as you hold it (touch or MIDI), like a kill switch on the guitar: the cut is at the input, so delay and reverb tails keep ringing. The fade is about 1.5 ms, so rhythmic stutters stay tight without clicking.
 - **Tuner** (YIN). It works on the input, before the chain, and mutes the output while you tune. It shows the note, octave, cents, frequency and the nearest standard-tuning string.
 - **Gapless preset switching.** Plugins already in the chain are kept (even if they move to another slot) and only receive the new settings. New plugins are created while the old chain keeps playing, then the chain is swapped in one step with a short fade (about 8 ms out, 30 ms in), so loading, moving or removing a plugin never clicks. Delay and reverb tails are not affected by the fade.
 - **Delay and reverb tails ring out.** When you change preset, delays and reverbs that were playing keep ringing with their old settings (they get no new input) for about 12 seconds and then fade out, while the new preset already plays. If the new preset uses the same delay or reverb with the same settings, it simply carries on. Turn it off in **Settings → Let delay and reverb tails ring out on preset change**. A slot counts as delay or reverb by its type (set it from the slot menu if "Automatic" guesses wrong).
@@ -59,6 +60,8 @@ Pick them from the slot menu: **Built-in effects → category → pedal**. They 
 | Modulation | **TR-2 Tremolo** | VCA tremolo from its schematic: a triangle LFO (90 – 900 ms period) that the Wave control squares off by clipping, and a 10 ms filter on the VCA control so even the square wave doesn't click. | Rate, Wave (triangle → square), Depth |
 | Delay | **Space Echo RE-201** | Three-head tape echo following the original block diagram, on the same tape model as the EP-3: head 1 at 69 – 177 ms, heads 2 and 3 at twice and three times that, Intensity taken before the tone controls, repeats that darken as the tape slows, tape hiss (60 dB S/N), wow and flutter. Past Intensity 7 it self-oscillates, held back by tape and amplifier saturation. No spring reverb. | Input, Rate, Intensity, Echo, Bass, Treble (repeats only), Wow; Heads 1 / 2 / 3 / 2+3 / 1+2 / 1+2+3 |
 | Tape | **Echoplex EP-3** | Physical model of magnetic tape (no echo): record pre-emphasis, the tape's hysteresis (Jiles-Atherton), playback-head losses and head bump that depend on the tape speed, wow and flutter. Mostly third-harmonic saturation that grows smoothly with your playing. | Drive (level compensated), Bias, Wow, Level; Speed 7.5 / 15 / 30 ips |
+| Pitch | **Whammy** | Pitch-shift pedal driven by an expression pedal: heel = your note, toe = the chosen interval. An original pitch shifter in the style of the reference pedal (which is digital, so there is no circuit to model): short grains read from a delay line, each splice placed where the waveform lines up, so single notes stay clean (within 2 cents) and chords work reasonably. About 7.5 ms of delay. | Treadle (or the MIDI expression pedal); Mode: 2 oct up, oct up, 5th up, 4th up, 2nd down, 4th down, 5th down, oct down, 2 oct down, dive bomb |
+| Pitch | **Micro POG** | Polyphonic octave generator, an original design in the style of the reference pedal (digital as well): about 65 band-pass filters, each note's phase doubled or halved in its own band, so chords keep their octaves apart. Octaves reach full level 5-14 ms after the pick. | Dry, Sub Octave, Octave Up, Filter (low-pass on the octaves only) |
 | Amp / Cab | **NAM** | Neural Amp Modeler captures with an optional cab IR (see above). | Capture, IR, levels |
 
 Notes:
@@ -130,6 +133,7 @@ All MIDI inputs are enabled automatically, including those connected after launc
 | Footswitches 1-4 | CC 80, 81, 82, 83 |
 | Tuner | CC 84 |
 | Tap tempo | CC 87 |
+| Expression pedal (Whammy treadle) | CC 11 |
 | Next / previous preset (or song, with a setlist) | CC 85 / CC 86 |
 | Preset number N (alphabetical order), or song N+1 with a setlist | Program Change N |
 
@@ -137,7 +141,11 @@ In **Settings → MIDI foot controller** choose how CC values are read:
 - **Momentary**: each press toggles. For controllers that send 127 on press and 0 on release.
 - **Absolute**: the value decides (127 = on, 0 = off). For controllers that alternate 127 and 0.
 
-To change the CC numbers, quit ChainRig and edit `cc_button1`…`cc_button4`, `cc_tuner`, `cc_nextPreset` and `cc_prevPreset` in the settings file:
+A footswitch in **kill** mode always follows the value (64 or more = muted, below 64 = sound back), whatever the setting above, so set that pedal on your controller to momentary (127 on press, 0 on release). A pedal that sends only 127 would leave the guitar muted until the next press with a lower value.
+
+The expression pedal is read directly on the MIDI thread: it moves the Whammy's treadle with no delay, is not stored in presets and does not mark the preset as changed. Until the first expression message arrives, the Treadle knob in the pedal window works instead.
+
+To change the CC numbers, quit ChainRig and edit `cc_button1`…`cc_button4`, `cc_tuner`, `cc_nextPreset`, `cc_prevPreset` and `cc_expression` in the settings file:
 - Windows: `%APPDATA%\ChainRig\ChainRig.settings`
 - macOS: `~/Library/Application Support/ChainRig/ChainRig.settings`
 

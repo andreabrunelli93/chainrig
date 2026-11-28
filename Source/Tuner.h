@@ -26,6 +26,7 @@ public:
     std::atomic<bool> capturing { false };  // copia i campioni per l'analisi
     std::atomic<float> inputGainDb { 0.0f };
     std::atomic<bool> inputMuted { false }; // MUTE d'ingresso: le code di delay e riverbero continuano
+    std::atomic<bool> killed { false };     // kill switch (pedale tenuto premuto): come il MUTE ma con una rampa di 1,5 ms
 
     /** Thread dell'interfaccia: picco d'ingresso (dopo il gain, prima del mute) dall'ultima lettura. */
     float takeInputPeak()                   { return inputPeak.exchange (0.0f); }
@@ -90,6 +91,24 @@ public:
         if (! juce::exactlyEqual (target, lastGain) || juce::exactlyEqual (target, 0.0f))
             buffer.applyGainRamp (0, n, lastGain, target);
         lastGain = target;
+
+        // kill switch: rampa per campione (1,5 ms), indipendente dalla dimensione del blocco, così il taglio
+        // a tempo resta preciso anche con buffer grandi
+        const float killTarget = killed.load (std::memory_order_relaxed) ? 0.0f : 1.0f;
+        if (! juce::exactlyEqual (killGain, killTarget))
+        {
+            const float step = 1.0f / (float) juce::jmax (1.0, currentRate.load() * 0.0015);
+            for (int i = 0; i < n; ++i)
+            {
+                killGain = killTarget > killGain ? juce::jmin (killTarget, killGain + step) : juce::jmax (killTarget, killGain - step);
+                for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                    buffer.getWritePointer (ch)[i] *= killGain;
+            }
+        }
+        else if (juce::exactlyEqual (killTarget, 0.0f))
+        {
+            buffer.clear();
+        }
     }
 
     double getTailLengthSeconds() const override             { return 0.0; }
@@ -110,7 +129,7 @@ private:
     juce::AbstractFifo fifo { fifoSize };
     std::vector<float> fifoData = std::vector<float> ((size_t) fifoSize, 0.0f);
     std::atomic<double> currentRate { 48000.0 };
-    float lastGain = 1.0f, lastInputGain = 1.0f;
+    float lastGain = 1.0f, lastInputGain = 1.0f, killGain = 1.0f;
     std::atomic<float> inputPeak { 0.0f };
     std::atomic<bool> inputClipped { false };
 

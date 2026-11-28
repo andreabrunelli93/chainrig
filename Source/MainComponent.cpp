@@ -231,11 +231,12 @@ void BigButton::paint (Graphics& g)
     y += labelH + 14.0f;
 
     const bool isScene = button.mode == Engine::ButtonMode::scene;
+    const bool isKill  = button.mode == Engine::ButtonMode::kill;
     const String what = isScene ? "scene  " + String::fromUTF8 ("·  ") + String (button.sceneOn.size()) + " on"
-                                : describeSlots (button.slots);
+                                : (isKill ? String ("hold to mute") : describeSlots (button.slots));
     String sub;
     if (edit)
-        sub = (! isScene && button.slots.isEmpty()) ? String ("tap to assign slots")
+        sub = (! isScene && ! isKill && button.slots.isEmpty()) ? String ("tap to assign slots")
                                                     : what + String::fromUTF8 ("  ·  tap to edit");
     else
         sub = what + String::fromUTF8 ("  ·  CC ") + String (engine.getButtonCC (index));
@@ -248,6 +249,11 @@ void BigButton::paint (Graphics& g)
 void BigButton::mouseDown (const MouseEvent&)
 {
     owner.bigButtonPressed (index);
+}
+
+void BigButton::mouseUp (const MouseEvent&)
+{
+    owner.bigButtonReleased (index);
 }
 
 //==============================================================================
@@ -1468,24 +1474,38 @@ void MainComponent::bigButtonPressed (int index)
 {
     if (editMode)
         showBigButtonEditMenu (index);
+    else if (engine.getButton (index).mode == Engine::ButtonMode::kill)
+        engine.setButtonActive (index, true);
     else
         engine.toggleButton (index);
+}
+
+void MainComponent::bigButtonReleased (int index)
+{
+    if (engine.getButton (index).mode == Engine::ButtonMode::kill && engine.getButton (index).active)
+        engine.setButtonActive (index, false);
 }
 
 void MainComponent::showBigButtonEditMenu (int index)
 {
     const auto& button = engine.getButton (index);
     const bool isScene = button.mode == Engine::ButtonMode::scene;
+    const bool isKill  = button.mode == Engine::ButtonMode::kill;
 
-    enum { renameId = 1, modeSwitch, modeScene, storeSceneId, slotBase = 100 };
+    enum { renameId = 1, modeSwitch, modeScene, modeKill, storeSceneId, slotBase = 100 };
 
     PopupMenu menu;
     menu.addSectionHeader ("Footswitch " + String (index + 1) + "  (MIDI CC " + String (engine.getButtonCC (index)) + ")");
-    menu.addItem (modeSwitch, "Mode: switch (turns slots on/off)", true, ! isScene);
+    menu.addItem (modeSwitch, "Mode: switch (turns slots on/off)", true, ! isScene && ! isKill);
     menu.addItem (modeScene,  "Mode: scene (recalls a snapshot)", true, isScene);
+    menu.addItem (modeKill,   "Mode: kill (mutes the guitar while held, tails ring on)", true, isKill);
     menu.addSeparator();
 
-    if (isScene)
+    if (isKill)
+    {
+        menu.addItem (renameId, "Rename (now: " + button.label + ")...");
+    }
+    else if (isScene)
     {
         menu.addItem (storeSceneId, "Save current on/off to this scene");
         menu.addItem (renameId, "Rename scene (now: " + button.label + ")...");
@@ -1508,16 +1528,18 @@ void MainComponent::showBigButtonEditMenu (int index)
     }
 
     menu.showMenuAsync (PopupMenu::Options().withTargetComponent (bigButtons[index]),
-                        [this, index, isScene] (int result)
+                        [this, index, isScene, isKill] (int result)
     {
         if (result == renameId)
         {
-            askText (isScene ? "Scene name" : "Footswitch name when no slots are assigned", engine.getButton (index).label,
+            askText (isScene ? "Scene name" : (isKill ? "Footswitch name" : "Footswitch name when no slots are assigned"),
+                     engine.getButton (index).label,
                      [this, index] (String text) { engine.setButtonLabel (index, text); });
         }
-        else if (result == modeSwitch || result == modeScene)
+        else if (result == modeSwitch || result == modeScene || result == modeKill)
         {
-            engine.setButtonMode (index, result == modeScene ? Engine::ButtonMode::scene : Engine::ButtonMode::toggle);
+            engine.setButtonMode (index, result == modeScene ? Engine::ButtonMode::scene
+                                       : (result == modeKill ? Engine::ButtonMode::kill : Engine::ButtonMode::toggle));
             showBigButtonEditMenu (index);
         }
         else if (result == storeSceneId)
@@ -1828,6 +1850,7 @@ void MainComponent::showSettingsMenu()
                             + "   Tuner: CC " + String (engine.getTunerCC()) + "   Tap tempo: CC " + String (engine.getTapTempoCC()), false);
     midiMenu.addItem (-2, "Presets: CC " + String (engine.getNextPresetCC()) + " next, CC " + String (engine.getPrevPresetCC())
                             + " previous, Program Change = preset number", false);
+    midiMenu.addItem (-3, "Expression pedal (Whammy treadle): CC " + String (engine.getExpressionCC()), false);
 
     const bool isFullScreen = Desktop::getInstance().getKioskModeComponent() != nullptr;
 
