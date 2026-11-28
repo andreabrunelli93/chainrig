@@ -21,7 +21,7 @@ namespace
     // 1N914 (modello SPICE comune: Is 2,52 nA, n 1,752)
     constexpr double diodeIs = 2.52e-9, diodeN = 1.752;
 
-    // uscita: scala fisica 0,4 (1 / 2,5 V); il pedale ha poco volume in uscita (scelta misurata sotto)
+    // uscita: 6 dB sopra la scala fisica 0,4 (1 / 2,5 V), come gli altri pedali
     constexpr double outputScale = 0.8;
 }
 
@@ -34,7 +34,9 @@ OpAmpDistortion::Info OpAmpDistortion::getInfo()
     i.category = "Distortion";
     i.menuCategory = "Distortion / Overdrive";
     i.uniqueId = 0x44535431;   // "DST1"
-    i.oversamplingOrder = 2;   // scelto dalla misura dell'aliasing (vedi nota)
+    i.oversamplingOrder = 1;   // 2x. Aliasing misurato (FFT intera, Hann): a GAIN 10 2x e 4x danno lo stesso
+                               // (-44/-36 dB a 659/1187 Hz: armoniche altissime dei rail duri, ripiegate nello stesso
+                               // punto); 8x -57/-44 ma costerebbe circa 3 volte. Note basse: 330 Hz -52 dB, 110 Hz -79.
 
     i.look.enclosureTop = Colour (0xff3a3f47);
     i.look.enclosureBottom = Colour (0xff1c1f24);
@@ -56,7 +58,7 @@ OpAmpDistortion::OpAmpDistortion() : PedalProcessor (getInfo())
     bass    = addKnob ("bass",    "Bass",    5.0f);
     contour = addKnob ("contour", "Contour", 5.0f);
     treble  = addKnob ("treble",  "Treble",  5.0f);
-    volume  = addKnob ("volume",  "Volume",  5.0f);
+    volume  = addKnob ("volume",  "Volume",  6.5f);   // 6,5: vicino al bypass con le altre a 5
 
     // A: ingresso e IC1A
     {
